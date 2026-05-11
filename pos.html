@@ -323,6 +323,12 @@
           <span id="subtotal-display">฿0.00</span>
         </div>
 
+        <!-- ส่วนลดรายการสินค้า (แสดงเมื่อมี) -->
+        <div id="item-disc-row" style="display:none;justify-content:space-between;align-items:center;margin-bottom:4px;padding:3px 0">
+          <span style="font-size:0.8rem;color:#f87171"><i class="bi bi-tag me-1"></i>ส่วนลดรายการ</span>
+          <span style="font-size:0.82rem;color:#f87171" id="item-disc-display">-฿0</span>
+        </div>
+
         <!-- ส่วนลดพนักงาน -->
         <div class="disc-row" style="margin-bottom:4px">
           <label style="font-size:0.8rem;color:#94a3b8">ส่วนลดพนักงาน</label>
@@ -867,7 +873,7 @@
       const curQty = ci ? ci.qty : 0;
       if (curQty >= stock) { toast(`สินค้าเต็มจำนวน (${stock} ชิ้น)`, 'warning'); return; }
       if (ci) ci.qty++;
-      else cart.push({ code: p.code, name: p.name, price: Number(p.selling_price || 0), qty: 1, unit: p.unit || 'ชิ้น' });
+      else cart.push({ code: p.code, name: p.name, price: Number(p.selling_price || 0), qty: 1, unit: p.unit || 'ชิ้น', itemDiscType: 'baht', itemDiscVal: 0 });
       renderCart();
       toast(`+ ${p.name.substring(0, 30)}${p.name.length > 30 ? '...' : ''}`, 'success', 700);
     }
@@ -922,22 +928,69 @@
       }
 
       document.getElementById('pay-btn').disabled = false;
-      body.innerHTML = cart.map(i => `
-        <div class="cart-item">
+      body.innerHTML = cart.map(i => {
+        const sc = (i.code||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const lineOrig = i.price * i.qty;
+        const itemDisc = getItemDiscAmt(i);
+        const lineNet = lineOrig - itemDisc;
+        const discLabel = i.itemDiscType === 'pct' ? '%' : '฿';
+        return `<div class="cart-item">
           <div class="ci-name">${i.name}</div>
           <div class="ci-bottom">
-            <div class="ci-price">฿${i.price.toLocaleString()} × ${i.qty} = <strong>฿${(i.price * i.qty).toLocaleString()}</strong></div>
+            <div class="ci-price">
+              ฿${i.price.toLocaleString()} × ${i.qty}
+              ${itemDisc > 0
+                ? ` = <s style="color:#64748b;font-size:0.75rem">฿${lineOrig.toLocaleString()}</s> <strong style="color:#f87171">฿${lineNet.toLocaleString()}</strong>`
+                : ` = <strong>฿${lineOrig.toLocaleString()}</strong>`}
+            </div>
             <div class="qty-controls">
-              <button class="qbtn" onclick="changeQty('${i.code}',-1)">−</button>
+              <button class="qbtn" onclick="changeQty('${sc}',-1)">−</button>
               <span class="qty-val">${i.qty}</span>
-              <button class="qbtn" onclick="changeQty('${i.code}',1)">+</button>
-              <button class="qbtn del" onclick="removeItem('${i.code}')">×</button>
+              <button class="qbtn" onclick="changeQty('${sc}',1)">+</button>
+              <button class="qbtn del" onclick="removeItem('${sc}')">×</button>
             </div>
           </div>
-        </div>
-      `).join('');
+          <div style="display:flex;align-items:center;gap:4px;margin-top:5px;padding-top:5px;border-top:1px solid #1e293b">
+            <span style="font-size:0.7rem;color:#64748b;white-space:nowrap">ส่วนลด/รายการ</span>
+            <button onclick="toggleItemDiscType('${sc}')"
+              style="background:#0f172a;border:1px solid #334155;color:#94a3b8;border-radius:4px;padding:1px 7px;font-size:0.72rem;cursor:pointer;min-width:26px;font-family:inherit">${discLabel}</button>
+            <input type="number" value="${i.itemDiscVal||0}" min="0"
+              onchange="setItemDisc('${sc}',this.value)"
+              style="background:#0f172a;border:1px solid #334155;color:white;border-radius:4px;padding:2px 5px;width:64px;font-size:0.75rem;font-family:inherit;text-align:right">
+            ${itemDisc > 0 ? `<span style="margin-left:auto;color:#f87171;font-size:0.75rem;font-weight:600">-฿${itemDisc.toLocaleString()}</span>` : ''}
+          </div>
+        </div>`;
+      }).join('');
 
       updateTotals();
+    }
+
+    function getItemDiscAmt(item) {
+      const val = Number(item.itemDiscVal || 0);
+      if (val <= 0) return 0;
+      const lineTotal = item.price * item.qty;
+      if (item.itemDiscType === 'pct') return Math.floor(lineTotal * Math.min(val, 100) / 100);
+      return Math.min(val, lineTotal);
+    }
+
+    function toggleItemDiscType(code) {
+      const item = cart.find(x => x.code === code);
+      if (!item) return;
+      item.itemDiscType = item.itemDiscType === 'pct' ? 'baht' : 'pct';
+      item.itemDiscVal = 0;
+      renderCart();
+      updateTotals();
+    }
+
+    function setItemDisc(code, val) {
+      const item = cart.find(x => x.code === code);
+      if (!item) return;
+      item.itemDiscVal = Math.max(0, Number(val) || 0);
+      updateTotals();
+    }
+
+    function getItemDiscTotal() {
+      return cart.reduce((s, i) => s + getItemDiscAmt(i), 0);
     }
 
     function getStaffDisc(sub) {
@@ -947,9 +1000,17 @@
 
     function updateTotals() {
       const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
+      const itemDiscTotal = getItemDiscTotal();
       const staffAmt = getStaffDisc(sub);
-      const totalDisc = Math.min(sub, staffAmt + memberDiscAmt + pointsDiscAmt);
+      const totalDisc = Math.min(sub, itemDiscTotal + staffAmt + memberDiscAmt + pointsDiscAmt);
       const total = Math.max(0, sub - totalDisc);
+
+      // ส่วนลดรายการ
+      const iRow = document.getElementById('item-disc-row');
+      if (itemDiscTotal > 0) {
+        iRow.style.display = 'flex';
+        document.getElementById('item-disc-display').textContent = `-฿${itemDiscTotal.toLocaleString()}`;
+      } else iRow.style.display = 'none';
 
       document.getElementById('subtotal-display').textContent = `฿${sub.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
       document.getElementById('total-display').textContent = `฿${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
@@ -979,11 +1040,11 @@
 
     function getNetTotal() {
       const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
-      return Math.max(0, sub - Math.min(sub, getStaffDisc(sub) + memberDiscAmt + pointsDiscAmt));
+      return Math.max(0, sub - Math.min(sub, getItemDiscTotal() + getStaffDisc(sub) + memberDiscAmt + pointsDiscAmt));
     }
 
     function getTotalDisc(sub) {
-      return Math.min(sub, getStaffDisc(sub) + memberDiscAmt + pointsDiscAmt);
+      return Math.min(sub, getItemDiscTotal() + getStaffDisc(sub) + memberDiscAmt + pointsDiscAmt);
     }
 
     // ── Payment ───────────────────────────────────────────
@@ -1085,9 +1146,9 @@
 
         const sale = {
           receipt_no: rno, branch: 'main',
-          items: cart.map(i => ({ product_code: i.code, product_name: i.name, quantity: i.qty, unit_price: i.price, total: i.price * i.qty })),
+          items: cart.map(i => ({ product_code: i.code, product_name: i.name, quantity: i.qty, unit_price: i.price, total: i.price * i.qty, item_discount: getItemDiscAmt(i), item_disc_type: i.itemDiscType, item_disc_val: i.itemDiscVal || 0 })),
           subtotal: sub, discount: disc, total,
-          discount_breakdown: { staff: getStaffDisc(sub), member: memberDiscAmt, points: pointsDiscAmt },
+          discount_breakdown: { item: getItemDiscTotal(), staff: getStaffDisc(sub), member: memberDiscAmt, points: pointsDiscAmt },
           payment_method: payMethod,
           created_at: FieldValue.serverTimestamp(),
           cashier: currentUser.email,
@@ -1129,16 +1190,45 @@
 
     function showReceipt(sale, now) {
       const d = now || new Date();
-      const rows = sale.items.map(i => `
-        <tr><td colspan="2" style="font-size:11px;padding:2px 0">${i.product_name}</td></tr>
-        <tr><td style="font-size:11px;padding:1px 0">${i.quantity} × ฿${i.unit_price.toLocaleString()}</td>
-            <td style="font-size:11px;padding:1px 0;text-align:right">฿${i.total.toLocaleString()}</td></tr>
-      `).join('');
+      const storeName = settings.store_name || 'PAJARA PAJAMAS';
+      const branchName = settings.branch_name || 'สาขาหลัก';
+
+      const rows = sale.items.map(i => {
+        const iDisc = Number(i.item_discount || 0);
+        const lineNet = (i.total||0) - iDisc;
+        return `<tr><td colspan="2" style="font-size:11px;padding:2px 0">${i.product_name}</td></tr>
+        <tr><td style="font-size:11px;padding:1px 0">${i.quantity} × ฿${(i.unit_price||0).toLocaleString()}</td>
+            <td style="font-size:11px;padding:1px 0;text-align:right">${iDisc > 0 ? `<s style="color:#aaa">฿${(i.total||0).toLocaleString()}</s> ฿${lineNet.toLocaleString()}` : `฿${(i.total||0).toLocaleString()}`}</td></tr>
+        ${iDisc > 0 ? `<tr><td style="font-size:10px;color:#aaa;padding-left:6px">└ ส่วนลดรายการ</td><td style="font-size:10px;color:#aaa;text-align:right">-฿${iDisc.toLocaleString()}</td></tr>` : ''}`;
+      }).join('');
+
+      // สร้างบรรทัดส่วนลด breakdown
+      const bd = sale.discount_breakdown || {};
+      const itemD   = Number(bd.item   || 0);
+      const staffD  = Number(bd.staff  || 0);
+      const memberD = Number(bd.member || 0);
+      const pointsD = Number(bd.points || 0);
+      const totalD  = Number(sale.discount || 0);
+      let discRows = '';
+      if (totalD > 0) {
+        const types = [itemD > 0, staffD > 0, memberD > 0, pointsD > 0].filter(Boolean).length;
+        if (types > 1) {
+          discRows += `<tr><td style="font-size:11px">ส่วนลดรวม</td><td style="text-align:right;font-size:11px">-฿${totalD.toLocaleString()}</td></tr>`;
+          if (staffD > 0)  discRows += `<tr><td style="font-size:10px;color:#888;padding-left:10px">└ พนักงาน</td><td style="text-align:right;font-size:10px;color:#888">-฿${staffD.toLocaleString()}</td></tr>`;
+          if (memberD > 0) discRows += `<tr><td style="font-size:10px;color:#888;padding-left:10px">└ สมาชิก</td><td style="text-align:right;font-size:10px;color:#888">-฿${memberD.toLocaleString()}</td></tr>`;
+          if (pointsD > 0) discRows += `<tr><td style="font-size:10px;color:#888;padding-left:10px">└ แต้มสะสม</td><td style="text-align:right;font-size:10px;color:#888">-฿${pointsD.toLocaleString()}</td></tr>`;
+        } else if (totalD > 0) {
+          discRows = `<tr><td style="font-size:11px">ส่วนลด</td><td style="text-align:right;font-size:11px">-฿${totalD.toLocaleString()}</td></tr>`;
+        }
+      }
+
+      const memberLine = sale.member_name ? `<tr><td style="font-size:10px;color:#888">สมาชิก</td><td style="text-align:right;font-size:10px;color:#888">${sale.member_name}</td></tr>` : '';
+
       const html = `
         <div style="font-family:'Courier New',monospace;max-width:320px;margin:0 auto">
           <div style="text-align:center;margin-bottom:12px">
-            <div style="font-size:1rem;font-weight:700">🛍️ Pajara POS</div>
-            <div style="font-size:11px">${settings.branch_name || 'สาขาหลัก'}</div>
+            <div style="font-size:1rem;font-weight:700">🛍️ ${storeName}</div>
+            <div style="font-size:11px">${branchName}</div>
             <div style="font-size:11px">${d.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'})} ${d.toLocaleTimeString('th-TH')}</div>
             <div style="font-size:11px">ใบเสร็จ: ${sale.receipt_no}</div>
           </div>
@@ -1146,13 +1236,14 @@
           <table style="width:100%">${rows}</table>
           <hr style="border-style:dashed">
           <table style="width:100%">
-            <tr><td>ยอดรวม</td><td style="text-align:right">฿${sale.subtotal.toLocaleString()}</td></tr>
-            ${sale.discount > 0 ? `<tr><td>ส่วนลด</td><td style="text-align:right">-฿${sale.discount.toLocaleString()}</td></tr>` : ''}
-            <tr style="font-weight:700"><td>ยอดสุทธิ</td><td style="text-align:right">฿${sale.total.toLocaleString()}</td></tr>
+            <tr><td>ยอดรวม</td><td style="text-align:right">฿${(sale.subtotal||0).toLocaleString()}</td></tr>
+            ${discRows}
+            <tr style="font-weight:700"><td>ยอดสุทธิ</td><td style="text-align:right">฿${(sale.total||0).toLocaleString()}</td></tr>
             <tr><td style="font-size:11px;color:#666">ชำระโดย</td><td style="font-size:11px;color:#666;text-align:right">${sale.payment_method === 'cash' ? 'เงินสด' : 'โอน/QR'}</td></tr>
+            ${memberLine}
           </table>
           <div style="text-align:center;margin-top:12px;font-size:11px;color:#888">
-            ขอบคุณที่ใช้บริการ Pajara<br>${settings.receipt_footer || ''}
+            ${settings.receipt_footer || 'ขอบคุณที่ใช้บริการ'}
           </div>
         </div>`;
       document.getElementById('receipt-body').innerHTML = html;
@@ -1169,28 +1260,32 @@
     function doPrint() { window.print(); }
 
     // ── Summary ───────────────────────────────────────────
+    let summaryData = [];
+
     async function showSummary() {
       new bootstrap.Modal(document.getElementById('sumModal')).show();
       const body = document.getElementById('sum-body');
       body.innerHTML = '<div class="text-center py-4"><div class="spinner-border" style="color:#7c3aed"></div></div>';
       try {
         const today = new Date(); today.setHours(0,0,0,0);
-        // ใช้ where เดียวเพื่อไม่ต้อง composite index
         const snap = await db.collection('sales')
           .where('created_at','>=', firebase.firestore.Timestamp.fromDate(today))
           .get();
         let rev = 0, disc = 0, cnt = 0, rows = [];
+        summaryData = [];
         const salesArr = [];
-        snap.forEach(d => { const s = d.data(); if (s.branch === 'main') salesArr.push(s); });
+        snap.forEach(d => { const s = { id: d.id, ...d.data() }; if (s.branch === 'main') salesArr.push(s); });
         salesArr.sort((a, b) => (b.created_at?.seconds||0) - (a.created_at?.seconds||0));
-        salesArr.forEach(s => {
+        salesArr.forEach((s, idx) => {
+          summaryData.push(s);
           rev += s.total || 0; disc += s.discount || 0; cnt++;
           rows.push(`<tr>
-            <td><small>${s.receipt_no}</small></td>
+            <td><small class="font-monospace">${s.receipt_no}</small></td>
             <td><strong>฿${(s.total||0).toLocaleString()}</strong></td>
-            <td>${s.payment_method === 'cash' ? '💵 เงินสด' : '📱 โอน'}</td>
+            <td><small>${s.payment_method === 'cash' ? '💵 เงินสด' : '📱 โอน'}</small></td>
             <td><small>${s.member_name ? '👤 '+s.member_name : ''}</small></td>
             <td><small>${s.created_at?.toDate?.().toLocaleTimeString('th-TH') || '-'}</small></td>
+            <td><button class="btn btn-sm btn-outline-secondary py-0 px-2" onclick="printFromSummary(${idx})" title="พิมพ์ใบเสร็จ"><i class="bi bi-printer"></i></button></td>
           </tr>`);
         });
         body.innerHTML = `
@@ -1202,13 +1297,21 @@
           <h6 class="fw-bold mb-2">รายการขายวันนี้</h6>
           <div class="table-responsive">
             <table class="table table-sm table-hover">
-              <thead><tr><th>ใบเสร็จ</th><th>ยอด</th><th>ชำระ</th><th>สมาชิก</th><th>เวลา</th></tr></thead>
-              <tbody>${rows.join('') || '<tr><td colspan="5" class="text-center text-muted">ยังไม่มีรายการ</td></tr>'}</tbody>
+              <thead><tr><th>ใบเสร็จ</th><th>ยอด</th><th>ชำระ</th><th>สมาชิก</th><th>เวลา</th><th></th></tr></thead>
+              <tbody>${rows.join('') || '<tr><td colspan="6" class="text-center text-muted">ยังไม่มีรายการ</td></tr>'}</tbody>
             </table>
           </div>`;
       } catch (e) {
         body.innerHTML = `<div class="alert alert-danger">โหลดไม่ได้: ${e.message}</div>`;
       }
+    }
+
+    function printFromSummary(idx) {
+      const sale = summaryData[idx];
+      if (!sale) return;
+      const d = sale.created_at?.toDate?.() || new Date();
+      bootstrap.Modal.getInstance(document.getElementById('sumModal'))?.hide();
+      setTimeout(() => showReceipt(sale, d), 400);
     }
 
     // ── Barcode (USB Scanner) ─────────────────────────────
