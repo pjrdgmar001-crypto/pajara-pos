@@ -322,23 +322,45 @@
           <span class="label">ยอดรวม</span>
           <span id="subtotal-display">฿0.00</span>
         </div>
-        <div class="disc-row">
-          <label>ส่วนลด</label>
+
+        <!-- ส่วนลดพนักงาน -->
+        <div class="disc-row" style="margin-bottom:4px">
+          <label style="font-size:0.8rem;color:#94a3b8">ส่วนลดพนักงาน</label>
           <div style="display:flex;gap:4px;align-items:center">
-            <button id="disc-type-btn" onclick="toggleDiscType()" style="background:#334155;border:1px solid #475569;color:#a5b4fc;border-radius:6px;padding:3px 10px;font-size:0.85rem;cursor:pointer;min-width:38px;font-family:inherit">฿</button>
+            <button id="disc-type-btn" onclick="toggleDiscType()" style="background:#334155;border:1px solid #475569;color:#a5b4fc;border-radius:6px;padding:3px 10px;font-size:0.82rem;cursor:pointer;min-width:38px;font-family:inherit">฿</button>
             <input type="number" class="disc-input" id="disc-input" min="0" max="999999" value="0" oninput="updateTotals()">
           </div>
         </div>
+
+        <!-- ส่วนลดสมาชิก (แสดงเมื่อมีสมาชิก) -->
+        <div id="member-disc-row" style="display:none;justify-content:space-between;align-items:center;margin-bottom:4px;padding:4px 0;border-top:1px solid #1e293b">
+          <span style="font-size:0.8rem;color:#a5b4fc"><i class="bi bi-person-check me-1"></i>ส่วนลดสมาชิก (<span id="mb-disc-pct">0</span>%)</span>
+          <span style="font-size:0.82rem;color:#a5b4fc" id="member-disc-display">-฿0</span>
+        </div>
+
+        <!-- ส่วนลดแต้ม (แสดงเมื่อใช้แต้ม) -->
+        <div id="points-disc-row" style="display:none;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:0.8rem;color:#fbbf24"><i class="bi bi-star me-1"></i>ส่วนลดแต้ม</span>
+          <span style="font-size:0.82rem;color:#fbbf24" id="points-disc-display">-฿0</span>
+        </div>
+
+        <!-- รวมส่วนลด (แสดงเมื่อมีส่วนลดมากกว่า 1 ประเภท) -->
+        <div id="total-disc-row" style="display:none;justify-content:space-between;align-items:center;margin-bottom:2px;padding-top:4px;border-top:1px solid #334155">
+          <span style="font-size:0.78rem;color:#64748b">รวมส่วนลดทั้งหมด</span>
+          <span style="font-size:0.82rem;color:#f87171;font-weight:600" id="total-disc-display">-฿0</span>
+        </div>
+
         <div class="total-line">
           <span class="total-label">ยอดสุทธิ</span>
           <span class="total-amount" id="total-display">฿0.00</span>
         </div>
-        <!-- Member -->
-        <div id="member-bar" style="background:#1e293b;border-radius:8px;padding:8px 10px;margin-bottom:8px;display:none">
+
+        <!-- Member bar -->
+        <div id="member-bar" style="background:#1e293b;border-radius:8px;padding:7px 10px;margin-bottom:8px;display:none">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
               <div style="font-size:0.82rem;color:#a5b4fc"><i class="bi bi-person-check me-1"></i><span id="mb-name"></span></div>
-              <div style="font-size:0.75rem;color:#64748b">แต้ม: <span id="mb-points"></span> | ส่วนลด: <span id="mb-disc"></span>%</div>
+              <div style="font-size:0.72rem;color:#64748b">แต้ม: <span id="mb-points"></span> | ส่วนลด: <span id="mb-disc"></span>%</div>
             </div>
             <button onclick="clearMember()" style="background:none;border:none;color:#f87171;font-size:1rem">×</button>
           </div>
@@ -679,11 +701,12 @@
     let settings = {};
     let camStream = null;
     let discType = 'baht';
+    let memberDiscAmt = 0;
+    let pointsDiscAmt = 0;
 
     function toggleDiscType() {
       discType = discType === 'baht' ? 'pct' : 'baht';
-      const btn = document.getElementById('disc-type-btn');
-      btn.textContent = discType === 'baht' ? '฿' : '%';
+      document.getElementById('disc-type-btn').textContent = discType === 'baht' ? '฿' : '%';
       document.getElementById('disc-input').value = 0;
       updateTotals();
     }
@@ -869,11 +892,18 @@
       document.getElementById('disc-input').value = 0;
     }
 
+    function resetAllDisc() {
+      resetDisc();
+      memberDiscAmt = 0;
+      pointsDiscAmt = 0;
+    }
+
     function clearCart() {
       if (!cart.length) return;
       if (!confirm('ล้างรายการทั้งหมด?')) return;
       cart = [];
-      resetDisc();
+      resetAllDisc();
+      clearMember();
       renderCart();
     }
 
@@ -910,23 +940,50 @@
       updateTotals();
     }
 
-    function calcDisc(sub) {
+    function getStaffDisc(sub) {
       const val = Math.max(0, Number(document.getElementById('disc-input').value) || 0);
-      if (discType === 'pct') return Math.floor(sub * Math.min(val, 100) / 100);
-      return Math.min(val, sub);
+      return discType === 'pct' ? Math.floor(sub * Math.min(val, 100) / 100) : Math.min(val, sub);
     }
 
     function updateTotals() {
       const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
-      const disc = calcDisc(sub);
-      const total = Math.max(0, sub - disc);
+      const staffAmt = getStaffDisc(sub);
+      const totalDisc = Math.min(sub, staffAmt + memberDiscAmt + pointsDiscAmt);
+      const total = Math.max(0, sub - totalDisc);
+
       document.getElementById('subtotal-display').textContent = `฿${sub.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
       document.getElementById('total-display').textContent = `฿${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
+
+      // ส่วนลดสมาชิก
+      const mRow = document.getElementById('member-disc-row');
+      if (memberDiscAmt > 0) {
+        mRow.style.display = 'flex';
+        document.getElementById('member-disc-display').textContent = `-฿${memberDiscAmt.toLocaleString()}`;
+      } else mRow.style.display = 'none';
+
+      // ส่วนลดแต้ม
+      const pRow = document.getElementById('points-disc-row');
+      if (pointsDiscAmt > 0) {
+        pRow.style.display = 'flex';
+        document.getElementById('points-disc-display').textContent = `-฿${pointsDiscAmt.toLocaleString()}`;
+      } else pRow.style.display = 'none';
+
+      // รวมส่วนลด (แสดงเมื่อมีมากกว่า 1 ประเภท)
+      const discTypes = [staffAmt > 0, memberDiscAmt > 0, pointsDiscAmt > 0].filter(Boolean).length;
+      const tRow = document.getElementById('total-disc-row');
+      if (discTypes > 1 && totalDisc > 0) {
+        tRow.style.display = 'flex';
+        document.getElementById('total-disc-display').textContent = `-฿${totalDisc.toLocaleString()}`;
+      } else tRow.style.display = 'none';
     }
 
     function getNetTotal() {
       const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
-      return Math.max(0, sub - calcDisc(sub));
+      return Math.max(0, sub - Math.min(sub, getStaffDisc(sub) + memberDiscAmt + pointsDiscAmt));
+    }
+
+    function getTotalDisc(sub) {
+      return Math.min(sub, getStaffDisc(sub) + memberDiscAmt + pointsDiscAmt);
     }
 
     // ── Payment ───────────────────────────────────────────
@@ -1021,7 +1078,7 @@
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังบันทึก...';
       try {
         const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
-        const disc = calcDisc(sub);
+        const disc = getTotalDisc(sub);
         const total = Math.max(0, sub - disc);
         const now = new Date();
         const rno = `R${now.toISOString().slice(0,10).replace(/-/g,'')}${Date.now().toString().slice(-5)}`;
@@ -1030,6 +1087,7 @@
           receipt_no: rno, branch: 'main',
           items: cart.map(i => ({ product_code: i.code, product_name: i.name, quantity: i.qty, unit_price: i.price, total: i.price * i.qty })),
           subtotal: sub, discount: disc, total,
+          discount_breakdown: { staff: getStaffDisc(sub), member: memberDiscAmt, points: pointsDiscAmt },
           payment_method: payMethod,
           created_at: FieldValue.serverTimestamp(),
           cashier: currentUser.email,
@@ -1104,7 +1162,7 @@
 
     function afterSale() {
       cart = [];
-      resetDisc();
+      resetAllDisc();
       clearMember();
       renderCart();
     }
@@ -1274,20 +1332,20 @@
       document.getElementById('mb-name').textContent = m.name;
       document.getElementById('mb-points').textContent = m.points || 0;
       document.getElementById('mb-disc').textContent = m.discount_percent || 5;
+      document.getElementById('mb-disc-pct').textContent = m.discount_percent || 5;
       document.getElementById('member-bar').style.display = '';
 
-      // คำนวณส่วนลด: % สมาชิก + แต้มที่ใช้
+      // แยก member % discount และ points discount
       const sub = cart.reduce((s,i) => s + i.price*i.qty, 0);
-      const pctDisc = Math.floor(sub * (m.discount_percent||5) / 100);
-      const ptsDisc = Math.floor(usePoints / 10);
-      const totalDisc = pctDisc + ptsDisc;
-      discType = 'baht';
-      document.getElementById('disc-type-btn').textContent = '฿';
-      document.getElementById('disc-input').value = totalDisc;
-      updateTotals();
+      memberDiscAmt = Math.floor(sub * (m.discount_percent||5) / 100);
+      pointsDiscAmt = Math.floor(usePoints / 10);
 
+      updateTotals();
       bootstrap.Modal.getInstance(document.getElementById('memberModal'))?.hide();
-      toast(`สมาชิก ${m.name} | ส่วนลด ${m.discount_percent||5}% + แต้ม ฿${ptsDisc} = รวมลด ฿${totalDisc}`, 'success', 4000);
+
+      let msg = `สมาชิก ${m.name} | ส่วนลด ${m.discount_percent||5}% = ฿${memberDiscAmt}`;
+      if (pointsDiscAmt > 0) msg += ` | แต้ม ฿${pointsDiscAmt}`;
+      toast(msg, 'success', 4000);
     }
 
     async function createMember() {
@@ -1308,8 +1366,9 @@
 
     function clearMember() {
       currentMember = null;
+      memberDiscAmt = 0;
+      pointsDiscAmt = 0;
       document.getElementById('member-bar').style.display = 'none';
-      resetDisc();
       updateTotals();
     }
 
