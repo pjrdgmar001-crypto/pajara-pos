@@ -1157,16 +1157,16 @@
         };
         await db.collection('sales').add(sale);
 
-        // Update member points: ซื้อ 10 บาท = 1 แต้ม, หักแต้มที่ใช้
+        // อัปเดตแต้มสมาชิก: ซื้อครบ 100 บาท (ยอดสุทธิ) = 10 แต้ม, ใช้ 100 แต้ม = ลด 10 บาท
         if (currentMember) {
-          const earnPts = Math.floor(total / 10);  // 1 แต้ม ต่อ 10 บาท
+          const earnPts = Math.floor(total / 100) * 10;
           const usedPts = currentMember.usePoints || 0;
           await db.collection('members').doc(currentMember.phone).update({
             points: FieldValue.increment(earnPts - usedPts),
             total_spent: FieldValue.increment(total),
             last_purchase: FieldValue.serverTimestamp()
           });
-          toast(`⭐ ได้รับ ${earnPts} แต้ม${usedPts > 0 ? ` (ใช้ไป ${usedPts} แต้ม)` : ''}`, 'success', 3000);
+          if (earnPts > 0) toast(`⭐ ได้รับ ${earnPts} แต้ม (ซื้อ ฿${total.toLocaleString()})${usedPts > 0 ? ` | ใช้ไป ${usedPts} แต้ม` : ''}`, 'success', 3000);
         }
 
         // Decrement inventory
@@ -1391,20 +1391,22 @@
         const m = { phone, ...doc.data() };
         foundMemberCache = m;  // เก็บใน variable แทน JSON ใน onclick
         const pts = m.points || 0;
-        const ptsBaht = Math.floor(pts / 10);  // 10 แต้ม = 1 บาท
+        const maxUsable = Math.floor(pts / 100) * 100;
+        const ptsBaht = Math.floor(pts / 100) * 10;  // 100 แต้ม = 10 บาท
         res.innerHTML = `
           <div class="alert alert-success mb-3">
             <div class="fw-bold fs-6"><i class="bi bi-person-check me-1"></i>${m.name}</div>
             <div class="small mt-1">📞 ${phone} | ⭐ <strong>${pts}</strong> แต้ม (ใช้ได้ = ฿${ptsBaht})</div>
             <div class="small">ยอดซื้อรวม: ฿${(m.total_spent||0).toLocaleString()} | ส่วนลดสมาชิก: ${m.discount_percent||5}%</div>
+            <div class="small text-muted mt-1">📌 ทุก 100 แต้ม = ส่วนลด 10 บาท</div>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold small">ต้องการใช้แต้ม (แต้มละ 10 = ฿1)</label>
+            <label class="form-label fw-semibold small">ต้องการใช้แต้ม (100 แต้ม = ฿10)</label>
             <div class="input-group">
-              <input type="number" class="form-control" id="use-pts-input" min="0" max="${pts}" step="10" value="0" placeholder="0">
+              <input type="number" class="form-control" id="use-pts-input" min="0" max="${maxUsable}" step="100" value="0" placeholder="0">
               <span class="input-group-text">แต้ม = ฿<span id="pts-baht-preview">0</span></span>
             </div>
-            <div class="form-text">มีแต้ม ${pts} แต้ม ใช้ได้สูงสุด ฿${ptsBaht}</div>
+            <div class="form-text">มีแต้ม ${pts} แต้ม | ใช้ได้ครั้งนี้สูงสุด ${maxUsable} แต้ม = ฿${ptsBaht}</div>
           </div>
           <button class="btn btn-primary w-100" onclick="applyMemberFromCache()">
             <i class="bi bi-check-circle me-1"></i>ใช้สิทธิ์สมาชิก
@@ -1412,8 +1414,8 @@
         document.getElementById('mb-new-form').classList.add('d-none');
         // Live preview แต้ม
         document.getElementById('use-pts-input').addEventListener('input', function() {
-          const v = Math.min(Math.max(0, Number(this.value)||0), pts);
-          document.getElementById('pts-baht-preview').textContent = Math.floor(v/10);
+          const v = Math.floor(Math.min(Math.max(0, Number(this.value)||0), maxUsable) / 100) * 100;
+          document.getElementById('pts-baht-preview').textContent = Math.floor(v / 100) * 10;
         });
       } else {
         foundMemberCache = null;
@@ -1441,7 +1443,7 @@
       // แยก member % discount และ points discount
       const sub = cart.reduce((s,i) => s + i.price*i.qty, 0);
       memberDiscAmt = Math.floor(sub * (m.discount_percent||5) / 100);
-      pointsDiscAmt = Math.floor(usePoints / 10);
+      pointsDiscAmt = Math.floor(usePoints / 100) * 10;
 
       updateTotals();
       bootstrap.Modal.getInstance(document.getElementById('memberModal'))?.hide();

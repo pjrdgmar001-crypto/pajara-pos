@@ -439,9 +439,14 @@
           <h2><i class="bi bi-person-badge me-2"></i>สมาชิก</h2>
           <p>จัดการสมาชิก ดูแต้มสะสม และประวัติการซื้อ</p>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="showAddMemberModal()">
-          <i class="bi bi-person-plus me-1"></i>เพิ่มสมาชิก
-        </button>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-success btn-sm" onclick="exportMembersExcel()">
+            <i class="bi bi-file-earmark-excel me-1"></i>Export Excel
+          </button>
+          <button class="btn btn-primary btn-sm" onclick="showAddMemberModal()">
+            <i class="bi bi-person-plus me-1"></i>เพิ่มสมาชิก
+          </button>
+        </div>
       </div>
 
       <div class="row g-3 mb-4" id="member-stats">
@@ -1693,7 +1698,7 @@
     }
 
     async function deleteSale(id) {
-      if (!confirm('ลบรายการขายนี้?\n\n⚠️ สินค้าในบิลจะถูกคืนสต็อกอัตโนมัติ\n(ไม่สามารถกู้คืนได้)')) return;
+      if (!confirm('ลบรายการขายนี้?\n\n⚠️ สินค้าในบิลจะถูกคืนสต็อกอัตโนมัติ\n✅ ข้อมูลสมาชิก (แต้ม/ยอดซื้อ) จะไม่เปลี่ยนแปลง\n(ไม่สามารถกู้คืนได้)')) return;
       try {
         const saleDoc = await db.collection('sales').doc(id).get();
         if (!saleDoc.exists) { toast('ไม่พบรายการ', 'warning'); return; }
@@ -1936,6 +1941,27 @@
             <button class="btn btn-sm btn-outline-danger" onclick="deleteMember('${m.id}')"><i class="bi bi-trash"></i></button>
           </td>
         </tr>`).join('') : '<tr><td colspan="8" class="text-center py-4 text-muted">ไม่พบสมาชิก</td></tr>';
+    }
+
+    function exportMembersExcel() {
+      if (!allMembers.length) { toast('ไม่มีข้อมูลสมาชิก', 'warning'); return; }
+      const headers = ['เบอร์โทร','ชื่อ-นามสกุล','อีเมล','แต้มสะสม','ยอดซื้อรวม (฿)','ส่วนลดสมาชิก (%)','วันที่สมัคร','ซื้อล่าสุด'];
+      const rows = allMembers.map(m => [
+        m.phone || m.id,
+        m.name || '',
+        m.email || '',
+        m.points || 0,
+        m.total_spent || 0,
+        m.discount_percent || 5,
+        m.join_date?.toDate?.().toLocaleDateString('th-TH') || '',
+        m.last_purchase?.toDate?.().toLocaleDateString('th-TH') || ''
+      ]);
+      const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      ws['!cols'] = [14,20,24,10,16,14,14,14].map(w => ({ wch: w }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'สมาชิก');
+      XLSX.writeFile(wb, `members_${new Date().toISOString().slice(0,10)}.xlsx`);
+      toast(`Export สมาชิก ${allMembers.length} คน เรียบร้อย`, 'success');
     }
 
     function showAddMemberModal() {
