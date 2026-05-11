@@ -171,9 +171,16 @@
 
     <!-- ── DASHBOARD ── -->
     <div class="page-section active" id="page-dashboard">
-      <div class="page-header">
-        <h2><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
-        <p>ภาพรวมยอดขายและสถานะสต็อก</p>
+      <div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+        <div>
+          <h2><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+          <p id="dash-date-label">ภาพรวมยอดขายและสถานะสต็อก</p>
+        </div>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <input type="date" class="form-control form-control-sm" id="dash-date" style="width:160px">
+          <button class="btn btn-sm btn-primary" onclick="loadDashboard()"><i class="bi bi-search me-1"></i>ดูข้อมูล</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="setDashToday()"><i class="bi bi-calendar-today me-1"></i>วันนี้</button>
+        </div>
       </div>
       <div class="row g-3 mb-4" id="dash-stats">
         <div class="col-md-3 col-6"><div class="stat-card"><div class="stat-icon" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-currency-dollar"></i></div><div><div class="stat-value" id="d-revenue">-</div><div class="stat-label">ยอดขายวันนี้ (฿)</div></div></div></div>
@@ -186,7 +193,7 @@
         <div class="col-lg-8">
           <div class="data-table">
             <div class="data-table-header p-3 border-bottom d-flex justify-content-between align-items-center">
-              <strong>ยอดขายรายชั่วโมง (วันนี้)</strong>
+              <strong id="chart-label">ยอดขายรายชั่วโมง (วันนี้)</strong>
               <button class="btn btn-sm btn-outline-secondary" onclick="loadDashboard()"><i class="bi bi-arrow-clockwise"></i></button>
             </div>
             <div style="padding:16px"><div id="sales-chart-wrap"><canvas id="sales-chart"></canvas></div></div>
@@ -691,6 +698,7 @@
       loadUsers();
       document.getElementById('loading').style.display = 'none';
       document.getElementById('sales-date').value = new Date().toISOString().slice(0,10);
+      document.getElementById('dash-date').value = new Date().toISOString().slice(0,10);
     });
 
     // ── Navigation ────────────────────────────────────────
@@ -1246,9 +1254,19 @@
           <td class="fw-bold">฿${(s.total||0).toLocaleString()}</td>
           <td>${s.payment_method === 'cash' ? '💵 เงินสด' : '📱 โอน'}</td>
           <td><small>${s.cashier||'-'}</small></td>
-          <td><button class="btn btn-sm btn-outline-secondary" onclick='showSaleDetail(${JSON.stringify(s)})'>ดู</button></td>
+          <td>
+            <button class="btn btn-sm btn-outline-secondary me-1" onclick='showSaleDetail(${JSON.stringify(s)})'>ดู</button>
+            <button class="btn btn-sm btn-outline-danger" onclick="deleteSale('${s.id}')"><i class="bi bi-trash"></i></button>
+          </td>
         </tr>`;
       }).join('') : '<tr><td colspan="9" class="text-center py-4 text-muted">ไม่มีรายการขายในวันนี้</td></tr>';
+    }
+
+    async function deleteSale(id) {
+      if (!confirm('ลบรายการขายนี้?\n(ข้อมูลจะถูกลบถาวร ไม่สามารถกู้คืนได้)')) return;
+      await db.collection('sales').doc(id).delete();
+      toast('ลบรายการเรียบร้อย', 'success');
+      loadSalesHistory();
     }
 
     function showSaleDetail(s) {
@@ -1279,11 +1297,26 @@
       a.click();
     }
 
+    function setDashToday() {
+      document.getElementById('dash-date').value = new Date().toISOString().slice(0,10);
+      loadDashboard();
+    }
+
     // ── Dashboard ──────────────────────────────────────────
     async function loadDashboard() {
-      const today = new Date(); today.setHours(0,0,0,0);
+      const dateStr = document.getElementById('dash-date')?.value || new Date().toISOString().slice(0,10);
+      const start = new Date(dateStr); start.setHours(0,0,0,0);
+      const end = new Date(dateStr); end.setHours(23,59,59,999);
+      const isToday = dateStr === new Date().toISOString().slice(0,10);
+      const dateLabel = new Date(dateStr).toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
+      document.getElementById('dash-date-label').textContent = `ภาพรวมยอดขาย${isToday ? 'วันนี้' : ' ' + dateLabel}`;
+      document.getElementById('chart-label').textContent = `ยอดขายรายชั่วโมง (${isToday ? 'วันนี้' : dateLabel})`;
+
       const [saleSnap] = await Promise.all([
-        db.collection('sales').where('created_at','>=',firebase.firestore.Timestamp.fromDate(today)).get()
+        db.collection('sales')
+          .where('created_at','>=',firebase.firestore.Timestamp.fromDate(start))
+          .where('created_at','<=',firebase.firestore.Timestamp.fromDate(end))
+          .get()
       ]);
 
       let rev = 0, cnt = 0;

@@ -266,8 +266,11 @@
           <span id="subtotal-display">฿0.00</span>
         </div>
         <div class="disc-row">
-          <label>ส่วนลด (฿)</label>
-          <input type="number" class="disc-input" id="disc-input" min="0" value="0" oninput="updateTotals()">
+          <label>ส่วนลด</label>
+          <div style="display:flex;gap:4px;align-items:center">
+            <button id="disc-type-btn" onclick="toggleDiscType()" style="background:#334155;border:1px solid #475569;color:#a5b4fc;border-radius:6px;padding:3px 10px;font-size:0.85rem;cursor:pointer;min-width:38px;font-family:inherit">฿</button>
+            <input type="number" class="disc-input" id="disc-input" min="0" max="999999" value="0" oninput="updateTotals()">
+          </div>
         </div>
         <div class="total-line">
           <span class="total-label">ยอดสุทธิ</span>
@@ -466,6 +469,15 @@
     let payMethod = 'transfer';
     let settings = {};
     let camStream = null;
+    let discType = 'baht';
+
+    function toggleDiscType() {
+      discType = discType === 'baht' ? 'pct' : 'baht';
+      const btn = document.getElementById('disc-type-btn');
+      btn.textContent = discType === 'baht' ? '฿' : '%';
+      document.getElementById('disc-input').value = 0;
+      updateTotals();
+    }
 
     // ── Auth ──────────────────────────────────────────────
     auth.onAuthStateChanged(async (user) => {
@@ -641,11 +653,17 @@
 
     function removeItem(code) { cart = cart.filter(x => x.code !== code); renderCart(); }
 
+    function resetDisc() {
+      discType = 'baht';
+      document.getElementById('disc-type-btn').textContent = '฿';
+      document.getElementById('disc-input').value = 0;
+    }
+
     function clearCart() {
       if (!cart.length) return;
       if (!confirm('ล้างรายการทั้งหมด?')) return;
       cart = [];
-      document.getElementById('disc-input').value = 0;
+      resetDisc();
       renderCart();
     }
 
@@ -681,9 +699,15 @@
       updateTotals();
     }
 
+    function calcDisc(sub) {
+      const val = Math.max(0, Number(document.getElementById('disc-input').value) || 0);
+      if (discType === 'pct') return Math.floor(sub * Math.min(val, 100) / 100);
+      return Math.min(val, sub);
+    }
+
     function updateTotals() {
       const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
-      const disc = Math.max(0, Number(document.getElementById('disc-input').value) || 0);
+      const disc = calcDisc(sub);
       const total = Math.max(0, sub - disc);
       document.getElementById('subtotal-display').textContent = `฿${sub.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
       document.getElementById('total-display').textContent = `฿${total.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`;
@@ -691,8 +715,7 @@
 
     function getNetTotal() {
       const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
-      const disc = Math.max(0, Number(document.getElementById('disc-input').value) || 0);
-      return Math.max(0, sub - disc);
+      return Math.max(0, sub - calcDisc(sub));
     }
 
     // ── Payment ───────────────────────────────────────────
@@ -734,7 +757,7 @@
       wrap.innerHTML = '';
       const pp = (settings.promptpay_id || '').trim();
       if (!pp) {
-        wrap.innerHTML = '<div class="alert alert-info py-2 small">ยังไม่ตั้งค่า PromptPay<br>ไปที่ <strong>Admin &gt; Settings</strong> เพื่อตั้งค่า</div>';
+        wrap.innerHTML = '<div class="alert alert-warning py-2 small text-center"><i class="bi bi-qr-code me-1"></i>ยังไม่ตั้งค่า PromptPay<br>ไปที่ <strong>Admin → Settings → PromptPay</strong> เพื่อใส่เบอร์โทร<br><small class="text-muted">หรือชำระด้วยเงินสดแทน</small></div>';
         return;
       }
       document.getElementById('pp-info').textContent = `PromptPay: ${pp}`;
@@ -776,7 +799,7 @@
       btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>กำลังบันทึก...';
       try {
         const sub = cart.reduce((s, i) => s + i.price * i.qty, 0);
-        const disc = Math.max(0, Number(document.getElementById('disc-input').value) || 0);
+        const disc = calcDisc(sub);
         const total = Math.max(0, sub - disc);
         const now = new Date();
         const rno = `R${now.toISOString().slice(0,10).replace(/-/g,'')}${Date.now().toString().slice(-5)}`;
@@ -859,7 +882,7 @@
 
     function afterSale() {
       cart = [];
-      document.getElementById('disc-input').value = 0;
+      resetDisc();
       clearMember();
       renderCart();
     }
@@ -1036,6 +1059,8 @@
       const pctDisc = Math.floor(sub * (m.discount_percent||5) / 100);
       const ptsDisc = Math.floor(usePoints / 10);
       const totalDisc = pctDisc + ptsDisc;
+      discType = 'baht';
+      document.getElementById('disc-type-btn').textContent = '฿';
       document.getElementById('disc-input').value = totalDisc;
       updateTotals();
 
@@ -1062,7 +1087,7 @@
     function clearMember() {
       currentMember = null;
       document.getElementById('member-bar').style.display = 'none';
-      document.getElementById('disc-input').value = 0;
+      resetDisc();
       updateTotals();
     }
 
