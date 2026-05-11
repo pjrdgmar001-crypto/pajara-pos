@@ -220,12 +220,15 @@
           <h2><i class="bi bi-box-seam me-2"></i>สินค้า (Master Data)</h2>
           <p>ข้อมูลสินค้าทั้งหมด — อัพโหลด Excel หรือเพิ่มทีละชิ้น</p>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('xl-master-input').click()">
             <i class="bi bi-file-earmark-excel me-1"></i>อัพโหลด Excel
           </button>
           <button class="btn btn-primary btn-sm" onclick="openAddProduct()">
             <i class="bi bi-plus-circle me-1"></i>เพิ่มสินค้า
+          </button>
+          <button class="btn btn-outline-danger btn-sm" onclick="clearAllProducts()">
+            <i class="bi bi-trash3 me-1"></i>ล้างสินค้าทั้งหมด
           </button>
         </div>
       </div>
@@ -1194,6 +1197,43 @@
         await loadProducts();
       } catch (e) { toast('เกิดข้อผิดพลาด: ' + e.message, 'danger'); }
       btn.disabled = false;
+    }
+
+    async function clearAllProducts() {
+      const total = allProducts.length;
+      if (!total) { toast('ไม่มีสินค้าในระบบ', 'info'); return; }
+      if (!confirm(`⚠️ ล้างสินค้าทั้งหมด ${total.toLocaleString()} รายการ?\n\nข้อมูลจะหายถาวร ไม่สามารถกู้คืนได้`)) return;
+      if (!confirm(`ยืนยันอีกครั้ง — กด OK เพื่อลบสินค้า ${total.toLocaleString()} รายการออกทั้งหมด`)) return;
+
+      let progressEl = document.getElementById('import-progress');
+      if (!progressEl) {
+        progressEl = document.createElement('div');
+        progressEl.id = 'import-progress';
+        progressEl.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#ef4444;height:4px;transition:width 0.2s';
+        document.body.appendChild(progressEl);
+      }
+      progressEl.style.width = '0%';
+
+      try {
+        const snap = await db.collection('products').get();
+        const docs = snap.docs;
+        let deleted = 0;
+        const batchSize = 400;
+        for (let i = 0; i < docs.length; i += batchSize) {
+          const batch = db.batch();
+          docs.slice(i, i + batchSize).forEach(d => batch.delete(d.ref));
+          await batch.commit();
+          deleted += Math.min(batchSize, docs.length - i);
+          progressEl.style.width = Math.round(deleted / docs.length * 100) + '%';
+        }
+        progressEl.style.width = '100%';
+        setTimeout(() => progressEl.remove(), 800);
+        toast(`🗑️ ลบสินค้าทั้งหมด ${deleted.toLocaleString()} รายการเรียบร้อย`, 'success', 5000);
+        await loadProducts();
+      } catch(e) {
+        progressEl?.remove();
+        toast('เกิดข้อผิดพลาด: ' + e.message, 'danger');
+      }
     }
 
     async function deleteProduct(id, code) {
