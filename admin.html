@@ -146,6 +146,9 @@
     <button class="nav-item-link" onclick="showPage('sales')">
       <i class="bi bi-receipt"></i> ประวัติการขาย
     </button>
+    <button class="nav-item-link" onclick="showPage('promotions')">
+      <i class="bi bi-megaphone"></i> โปรโมชั่น
+    </button>
 
     <div class="nav-section">ระบบ</div>
     <button class="nav-item-link" onclick="showPage('members')">
@@ -406,6 +409,23 @@
             <tbody id="sales-tbody"><tr><td colspan="9" class="text-center py-4 text-muted">เลือกวันที่แล้วกด "ค้นหา"</td></tr></tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- ── PROMOTIONS ── -->
+    <div class="page-section" id="page-promotions">
+      <div class="page-header d-flex justify-content-between align-items-start">
+        <div>
+          <h2><i class="bi bi-megaphone me-2"></i>โปรโมชั่น</h2>
+          <p>สร้างประกาศโปรโมชั่นที่จะแสดงเป็นป๊อปอัพในหน้าร้าน</p>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openAddPromoModal()">
+          <i class="bi bi-plus-circle me-1"></i>เพิ่มโปรโมชั่น
+        </button>
+      </div>
+
+      <div class="row g-3" id="promo-grid">
+        <div class="col-12 text-center py-4 text-muted">กำลังโหลด...</div>
       </div>
     </div>
 
@@ -674,6 +694,49 @@
     </div>
   </div>
 
+  <!-- Add/Edit Promotion Modal -->
+  <div class="modal fade" id="promoModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="promo-modal-edit-title"><i class="bi bi-megaphone me-2"></i>เพิ่มโปรโมชั่น</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-md-5">
+              <label class="form-label fw-semibold">รูปภาพโปรโมชั่น</label>
+              <div id="promo-img-preview" style="width:100%;height:180px;background:#ede9fe;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:3rem;overflow:hidden">🎉</div>
+              <input type="file" id="promo-img-file" accept="image/*" class="d-none" onchange="previewPromoImg(this)">
+              <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="document.getElementById('promo-img-file').click()">
+                <i class="bi bi-image me-1"></i>เลือกรูปภาพ
+              </button>
+              <div id="promo-img-status" class="small text-muted mt-1 text-center"></div>
+            </div>
+            <div class="col-md-7">
+              <div class="mb-3">
+                <label class="form-label fw-semibold">ชื่อโปรโมชั่น <span class="text-danger">*</span></label>
+                <input type="text" class="form-control" id="pf-promo-title" placeholder="เช่น ลด 20% ทุกรายการ">
+              </div>
+              <div class="mb-3">
+                <label class="form-label fw-semibold">รายละเอียด</label>
+                <textarea class="form-control" id="pf-promo-desc" rows="4" placeholder="รายละเอียดโปรโมชั่น..."></textarea>
+              </div>
+              <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="pf-promo-active" checked>
+                <label class="form-check-label fw-semibold" for="pf-promo-active">เปิดใช้งาน (แสดงในหน้าร้าน)</label>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+          <button class="btn btn-primary" id="save-promo-btn" onclick="savePromo()"><i class="bi bi-save me-1"></i>บันทึก</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Add/Edit Member Modal -->
   <div class="modal fade" id="memberModal" tabindex="-1">
     <div class="modal-dialog">
@@ -780,6 +843,7 @@
       document.getElementById('page-' + name)?.classList.add('active');
       event?.currentTarget?.classList.add('active');
       if (name === 'members') loadMembers();
+      if (name === 'promotions') loadPromotions();
     }
 
     // ── Settings ──────────────────────────────────────────
@@ -1266,16 +1330,24 @@
     async function loadIntakeHistory() {
       const body = document.getElementById('intake-hist-body');
       body.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-secondary spinner-border-sm"></div></div>';
-      const snap = await db.collection('stock_intake').where('branch','==','main').orderBy('created_at','desc').limit(50).get();
-      if (snap.empty) { body.innerHTML = '<div class="text-center py-4 text-muted">ยังไม่มีประวัติ</div>'; return; }
-      let rows = '';
-      snap.forEach(d => {
-        const s = d.data();
-        const t = s.created_at?.toDate?.().toLocaleDateString('th-TH', { year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit' }) || '-';
-        rows += `<tr><td>${t}</td><td>${s.created_by||'-'}</td><td>${(s.items||[]).length} รายการ</td>
-          <td><button class="btn btn-sm btn-outline-secondary" onclick='showIntakeDetail(${JSON.stringify(s)})'>ดูรายละเอียด</button></td></tr>`;
-      });
-      body.innerHTML = `<table class="table table-hover"><thead><tr><th>วันที่</th><th>โดย</th><th>รายการ</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+      try {
+        const snap = await db.collection('stock_intake').orderBy('created_at','desc').limit(100).get();
+        if (snap.empty) { body.innerHTML = '<div class="text-center py-4 text-muted">ยังไม่มีประวัติ</div>'; return; }
+        const docs = [];
+        snap.forEach(d => { const s = { id: d.id, ...d.data() }; if (s.branch === 'main') docs.push(s); });
+        if (!docs.length) { body.innerHTML = '<div class="text-center py-4 text-muted">ยังไม่มีประวัติ</div>'; return; }
+        const rows = docs.map(s => {
+          const t = s.created_at?.toDate?.().toLocaleDateString('th-TH', { year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit' }) || '-';
+          const safeS = JSON.stringify(s).replace(/'/g,"\\'");
+          return `<tr>
+            <td>${t}</td><td>${s.created_by||'-'}</td><td>${(s.items||[]).length} รายการ</td>
+            <td><button class="btn btn-sm btn-outline-secondary" onclick='showIntakeDetail(JSON.parse(decodeURIComponent("${encodeURIComponent(JSON.stringify(s))}")))'>ดูรายละเอียด</button></td>
+          </tr>`;
+        }).join('');
+        body.innerHTML = `<table class="table table-hover"><thead><tr><th>วันที่</th><th>โดย</th><th>รายการ</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+      } catch(e) {
+        body.innerHTML = `<div class="alert alert-danger m-3">โหลดไม่ได้: ${e.message}</div>`;
+      }
     }
 
     function showIntakeDetail(s) {
@@ -1496,10 +1568,28 @@
     }
 
     async function deleteSale(id) {
-      if (!confirm('ลบรายการขายนี้?\n(ข้อมูลจะถูกลบถาวร ไม่สามารถกู้คืนได้)')) return;
-      await db.collection('sales').doc(id).delete();
-      toast('ลบรายการเรียบร้อย', 'success');
-      loadSalesHistory();
+      if (!confirm('ลบรายการขายนี้?\n\n⚠️ สินค้าในบิลจะถูกคืนสต็อกอัตโนมัติ\n(ไม่สามารถกู้คืนได้)')) return;
+      try {
+        const saleDoc = await db.collection('sales').doc(id).get();
+        if (!saleDoc.exists) { toast('ไม่พบรายการ', 'warning'); return; }
+        const sale = saleDoc.data();
+
+        // คืนสต็อกสินค้าทุกรายการในบิล
+        const batch = db.batch();
+        await Promise.all((sale.items || []).map(async item => {
+          if (!item.product_code || !item.quantity) return;
+          const snap = await db.collection('inventory')
+            .where('product_code','==',item.product_code)
+            .where('branch','==','main').get();
+          if (!snap.empty) batch.update(snap.docs[0].ref, { quantity: FieldValue.increment(item.quantity) });
+        }));
+        await batch.commit();
+
+        await db.collection('sales').doc(id).delete();
+        toast(`ลบบิลเรียบร้อย — คืนสต็อก ${(sale.items||[]).length} รายการ`, 'success', 4000);
+        loadSalesHistory();
+        await loadProducts();
+      } catch(e) { toast('เกิดข้อผิดพลาด: ' + e.message, 'danger'); }
     }
 
     function showSaleDetail(s) {
@@ -1767,6 +1857,139 @@
       await db.collection('members').doc(phone).delete();
       toast('ลบสมาชิกเรียบร้อย', 'success');
       loadMembers();
+    }
+
+    // ── Promotions ────────────────────────────────────────
+    let editingPromoId = null;
+    let promoImgFile = null;
+
+    async function loadPromotions() {
+      const grid = document.getElementById('promo-grid');
+      grid.innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-secondary spinner-border-sm"></div></div>';
+      const snap = await db.collection('promotions').orderBy('created_at','desc').get();
+      if (snap.empty) {
+        grid.innerHTML = '<div class="col-12 text-center py-5 text-muted"><i class="bi bi-megaphone" style="font-size:2.5rem;display:block;margin-bottom:8px;opacity:0.3"></i>ยังไม่มีโปรโมชั่น กด "เพิ่มโปรโมชั่น" เพื่อสร้าง</div>';
+        return;
+      }
+      grid.innerHTML = '';
+      snap.forEach(d => {
+        const p = { id: d.id, ...d.data() };
+        const col = document.createElement('div');
+        col.className = 'col-md-6 col-lg-4';
+        col.innerHTML = `
+          <div class="data-table h-100" style="border-radius:14px;overflow:hidden">
+            <div style="height:180px;overflow:hidden;background:#ede9fe;display:flex;align-items:center;justify-content:center;font-size:3rem">
+              ${p.image_url ? `<img src="${p.image_url}" style="width:100%;height:180px;object-fit:cover" onerror="this.style.display='none'">` : '🎉'}
+            </div>
+            <div style="padding:14px">
+              <div class="d-flex justify-content-between align-items-start mb-1">
+                <h6 class="fw-bold mb-0">${p.title||'ไม่มีชื่อ'}</h6>
+                <span class="badge ${p.is_active ? 'bg-success' : 'bg-secondary'}">${p.is_active ? 'เปิด' : 'ปิด'}</span>
+              </div>
+              <p class="text-muted small mb-3" style="white-space:pre-line">${(p.description||'').substring(0,120)}</p>
+              <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-primary flex-fill" onclick='openEditPromoModal(${JSON.stringify(p)})'><i class="bi bi-pencil me-1"></i>แก้ไข</button>
+                <button class="btn btn-sm ${p.is_active ? 'btn-outline-warning' : 'btn-outline-success'}" onclick="togglePromo('${p.id}',${p.is_active})">
+                  ${p.is_active ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>'}
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deletePromo('${p.id}')"><i class="bi bi-trash"></i></button>
+              </div>
+            </div>
+          </div>`;
+        grid.appendChild(col);
+      });
+    }
+
+    function openAddPromoModal() {
+      editingPromoId = null; promoImgFile = null;
+      document.getElementById('promo-modal-edit-title').innerHTML = '<i class="bi bi-megaphone me-2"></i>เพิ่มโปรโมชั่น';
+      document.getElementById('pf-promo-title').value = '';
+      document.getElementById('pf-promo-desc').value = '';
+      document.getElementById('pf-promo-active').checked = true;
+      document.getElementById('promo-img-preview').innerHTML = '🎉';
+      document.getElementById('promo-img-preview').style.backgroundImage = '';
+      document.getElementById('promo-img-file').value = '';
+      document.getElementById('promo-img-status').textContent = '';
+      new bootstrap.Modal(document.getElementById('promoModal')).show();
+    }
+
+    function openEditPromoModal(p) {
+      editingPromoId = p.id; promoImgFile = null;
+      document.getElementById('promo-modal-edit-title').innerHTML = '<i class="bi bi-pencil me-2"></i>แก้ไขโปรโมชั่น';
+      document.getElementById('pf-promo-title').value = p.title || '';
+      document.getElementById('pf-promo-desc').value = p.description || '';
+      document.getElementById('pf-promo-active').checked = p.is_active !== false;
+      const prev = document.getElementById('promo-img-preview');
+      if (p.image_url) {
+        prev.innerHTML = `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover">`;
+      } else {
+        prev.innerHTML = '🎉';
+      }
+      document.getElementById('promo-img-file').value = '';
+      document.getElementById('promo-img-status').textContent = '';
+      new bootstrap.Modal(document.getElementById('promoModal')).show();
+    }
+
+    function previewPromoImg(input) {
+      const file = input.files[0]; if (!file) return;
+      promoImgFile = file;
+      const reader = new FileReader();
+      reader.onload = e => {
+        document.getElementById('promo-img-preview').innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:cover">`;
+      };
+      reader.readAsDataURL(file);
+      document.getElementById('promo-img-status').textContent = `ไฟล์: ${file.name}`;
+    }
+
+    async function savePromo() {
+      const title = document.getElementById('pf-promo-title').value.trim();
+      if (!title) { toast('กรุณาใส่ชื่อโปรโมชั่น', 'warning'); return; }
+      const btn = document.getElementById('save-promo-btn');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก...';
+      try {
+        let image_url = '';
+        if (editingPromoId) {
+          const existing = await db.collection('promotions').doc(editingPromoId).get();
+          image_url = existing.data()?.image_url || '';
+        }
+        if (promoImgFile) {
+          document.getElementById('promo-img-status').textContent = 'กำลังอัปโหลดรูป...';
+          const ref = storage.ref(`promotions/${Date.now()}_${promoImgFile.name}`);
+          await ref.put(promoImgFile);
+          image_url = await ref.getDownloadURL();
+        }
+        const data = {
+          title,
+          description: document.getElementById('pf-promo-desc').value.trim(),
+          image_url,
+          is_active: document.getElementById('pf-promo-active').checked,
+          updated_at: FieldValue.serverTimestamp()
+        };
+        if (editingPromoId) {
+          await db.collection('promotions').doc(editingPromoId).update(data);
+        } else {
+          data.created_at = FieldValue.serverTimestamp();
+          data.created_by = currentUser.email;
+          await db.collection('promotions').add(data);
+        }
+        bootstrap.Modal.getInstance(document.getElementById('promoModal')).hide();
+        toast(editingPromoId ? 'แก้ไขโปรโมชั่นเรียบร้อย' : 'เพิ่มโปรโมชั่นเรียบร้อย', 'success');
+        loadPromotions();
+      } catch(e) { toast('เกิดข้อผิดพลาด: ' + e.message, 'danger'); }
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-save me-1"></i>บันทึก';
+    }
+
+    async function togglePromo(id, currentActive) {
+      await db.collection('promotions').doc(id).update({ is_active: !currentActive });
+      toast(currentActive ? 'ปิดโปรโมชั่นแล้ว' : 'เปิดโปรโมชั่นแล้ว', 'success');
+      loadPromotions();
+    }
+
+    async function deletePromo(id) {
+      if (!confirm('ลบโปรโมชั่นนี้?')) return;
+      await db.collection('promotions').doc(id).delete();
+      toast('ลบโปรโมชั่นเรียบร้อย', 'success');
+      loadPromotions();
     }
 
     // ── Toast ─────────────────────────────────────────────
