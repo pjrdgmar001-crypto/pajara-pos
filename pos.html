@@ -198,6 +198,9 @@
       <button class="btn btn-sm btn-outline-light" onclick="showSummary()">
         <i class="bi bi-bar-chart-line me-1"></i>สรุปวัน
       </button>
+      <button class="btn btn-sm btn-outline-warning text-warning" onclick="openEditBillSearch()">
+        <i class="bi bi-pencil-square me-1"></i>แก้ไขบิล
+      </button>
       <a href="admin.html" class="btn btn-sm btn-outline-secondary text-white border-secondary" id="admin-link" style="display:none">
         <i class="bi bi-gear"></i>
       </a>
@@ -426,6 +429,87 @@
         </div>
         <div class="modal-body" id="sum-body">
           <div class="text-center py-4"><div class="spinner-border" style="color:#7c3aed"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Bill Search Modal -->
+  <div class="modal fade" id="editBillSearchModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>แก้ไขบิล</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="input-group mb-3">
+            <span class="input-group-text"><i class="bi bi-receipt"></i></span>
+            <input type="text" class="form-control" id="pos-receipt-search" placeholder="พิมพ์เลขบิล เช่น R20260511xxxxx">
+            <button class="btn btn-primary" onclick="posSearchReceipt()">ค้นหา</button>
+          </div>
+          <div id="pos-receipt-result"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Bill Modal (POS) -->
+  <div class="modal fade" id="posEditSaleModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>แก้ไขบิล <span id="pes-receipt-no" class="text-muted fs-6 font-monospace"></span></h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning py-2 small mb-3"><i class="bi bi-exclamation-triangle me-1"></i><strong>สต็อกจะถูกปรับอัตโนมัติ</strong> — ระบบจะคืนสต็อกของบิลเดิม แล้วหักสต็อกตามบิลใหม่</div>
+          <div class="row g-3">
+            <div class="col-lg-7">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong>รายการสินค้า</strong>
+                <small id="pes-item-count" class="text-muted"></small>
+              </div>
+              <div id="pes-items-list" class="mb-3" style="max-height:280px;overflow-y:auto"></div>
+              <div class="p-3 rounded" style="background:#f8fafc;border:1px dashed #c7d2fe">
+                <div class="fw-semibold small mb-2"><i class="bi bi-plus-circle me-1 text-primary"></i>เพิ่มสินค้าในบิล</div>
+                <div class="input-group input-group-sm mb-2">
+                  <span class="input-group-text"><i class="bi bi-search"></i></span>
+                  <input type="text" class="form-control" id="pes-prod-search" placeholder="พิมพ์ชื่อ / รหัส / Barcode..." autocomplete="off" oninput="posProdSearchForEdit(this.value)">
+                </div>
+                <div id="pes-prod-results" style="background:white;border-radius:8px;max-height:180px;overflow-y:auto;box-shadow:0 2px 8px rgba(0,0,0,0.08)"></div>
+              </div>
+            </div>
+            <div class="col-lg-5">
+              <div style="background:white;border-radius:14px;padding:20px;border:1px solid #e5e7eb">
+                <h6 class="fw-bold mb-3">สรุปยอด</h6>
+                <div class="d-flex justify-content-between mb-2 small"><span class="text-muted">ยอดรวมสินค้า</span><strong id="pes-subtotal-info">฿0</strong></div>
+                <div class="mb-3">
+                  <label class="form-label small fw-semibold">ส่วนลด (฿)</label>
+                  <input type="number" class="form-control form-control-sm" id="pes-discount" min="0" oninput="updatePosEditSummary()">
+                </div>
+                <div class="d-flex justify-content-between align-items-center border-top pt-2 mb-3">
+                  <span class="fw-bold">ยอดสุทธิ</span>
+                  <span class="fw-bold fs-5" style="color:#7c3aed" id="pes-total-preview">฿0</span>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label small fw-semibold">วิธีชำระเงิน</label>
+                  <select class="form-select form-select-sm" id="pes-payment">
+                    <option value="cash">💵 เงินสด</option>
+                    <option value="transfer">📱 โอน / QR Code</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="form-label small fw-semibold">หมายเหตุการแก้ไข</label>
+                  <input type="text" class="form-control form-control-sm" id="pes-note" placeholder="เหตุผลที่แก้ไข">
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+          <button class="btn btn-warning px-4" id="pos-save-edit-btn" onclick="posSaveSaleEdit()"><i class="bi bi-save me-1"></i>บันทึกการแก้ไข</button>
         </div>
       </div>
     </div>
@@ -1083,6 +1167,175 @@
       document.getElementById('member-bar').style.display = 'none';
       resetDisc();
       updateTotals();
+    }
+
+    // ── Edit Bill (POS) ───────────────────────────────────
+    let posEditingSaleId = null;
+    let posEditingSaleData = null;
+
+    function openEditBillSearch() {
+      document.getElementById('pos-receipt-search').value = '';
+      document.getElementById('pos-receipt-result').innerHTML = '';
+      new bootstrap.Modal(document.getElementById('editBillSearchModal')).show();
+      setTimeout(() => document.getElementById('pos-receipt-search').focus(), 300);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('pos-receipt-search')?.addEventListener('keydown', e => {
+        if (e.key === 'Enter') posSearchReceipt();
+      });
+    });
+
+    async function posSearchReceipt() {
+      const rno = document.getElementById('pos-receipt-search').value.trim();
+      if (!rno) { toast('กรุณาใส่เลขบิล', 'warning'); return; }
+      const el = document.getElementById('pos-receipt-result');
+      el.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm text-secondary"></div></div>';
+      const snap = await db.collection('sales').where('receipt_no','==',rno).limit(1).get();
+      if (snap.empty) {
+        el.innerHTML = `<div class="alert alert-warning py-2 small">ไม่พบบิล: <strong>${rno}</strong></div>`;
+        return;
+      }
+      const s = { id: snap.docs[0].id, ...snap.docs[0].data() };
+      const t = s.created_at?.toDate?.().toLocaleString('th-TH') || '-';
+      el.innerHTML = `
+        <div class="alert alert-success py-2">
+          <div class="fw-bold">${s.receipt_no}</div>
+          <div class="small">${t} | ${(s.items||[]).length} รายการ | ยอดสุทธิ <strong>฿${(s.total||0).toLocaleString()}</strong></div>
+          <button class="btn btn-sm btn-warning mt-2 w-100" onclick='openPosEditSale(${JSON.stringify(s)})'><i class="bi bi-pencil me-1"></i>แก้ไขบิลนี้</button>
+        </div>`;
+    }
+
+    function openPosEditSale(s) {
+      posEditingSaleId = s.id;
+      posEditingSaleData = {
+        original_items: JSON.parse(JSON.stringify(s.items || [])),
+        items: JSON.parse(JSON.stringify(s.items || []))
+      };
+      bootstrap.Modal.getInstance(document.getElementById('editBillSearchModal'))?.hide();
+      setTimeout(() => {
+        document.getElementById('pes-receipt-no').textContent = s.receipt_no;
+        document.getElementById('pes-discount').value = s.discount || 0;
+        document.getElementById('pes-payment').value = s.payment_method || 'transfer';
+        document.getElementById('pes-note').value = s.edit_note || '';
+        document.getElementById('pes-prod-search').value = '';
+        document.getElementById('pes-prod-results').innerHTML = '';
+        renderPosEditItems();
+        updatePosEditSummary();
+        new bootstrap.Modal(document.getElementById('posEditSaleModal')).show();
+      }, 400);
+    }
+
+    function renderPosEditItems() {
+      const items = posEditingSaleData.items;
+      const el = document.getElementById('pes-items-list');
+      document.getElementById('pes-item-count').textContent = `${items.length} รายการ`;
+      if (!items.length) { el.innerHTML = '<div class="text-muted small py-3 text-center">ไม่มีรายการสินค้า</div>'; return; }
+      el.innerHTML = `<table class="table table-sm mb-0">
+        <thead><tr><th>สินค้า</th><th class="text-end">ราคา/ชิ้น</th><th class="text-center" style="width:120px">จำนวน</th><th class="text-end">รวม</th><th></th></tr></thead>
+        <tbody>${items.map((item, i) => `<tr>
+          <td class="small">${item.product_name}</td>
+          <td class="text-end small">฿${(item.unit_price||0).toLocaleString()}</td>
+          <td class="text-center">
+            <div class="input-group input-group-sm" style="width:110px;margin:0 auto">
+              <button class="btn btn-outline-secondary" onclick="changePosEditQty(${i},-1)">−</button>
+              <input type="number" class="form-control text-center px-1" value="${item.quantity||1}" min="1" onchange="setPosEditQty(${i},this.value)" style="min-width:36px">
+              <button class="btn btn-outline-secondary" onclick="changePosEditQty(${i},1)">+</button>
+            </div>
+          </td>
+          <td class="text-end fw-semibold small">฿${((item.unit_price||0)*(item.quantity||1)).toLocaleString()}</td>
+          <td><button class="btn btn-sm btn-outline-danger py-0 px-1" onclick="removePosEditItem(${i})"><i class="bi bi-trash"></i></button></td>
+        </tr>`).join('')}</tbody></table>`;
+    }
+
+    function changePosEditQty(i, d) {
+      posEditingSaleData.items[i].quantity = Math.max(1, (posEditingSaleData.items[i].quantity||1) + d);
+      renderPosEditItems(); updatePosEditSummary();
+    }
+    function setPosEditQty(i, v) {
+      posEditingSaleData.items[i].quantity = Math.max(1, Number(v)||1);
+      updatePosEditSummary();
+    }
+    function removePosEditItem(i) {
+      posEditingSaleData.items.splice(i, 1);
+      renderPosEditItems(); updatePosEditSummary();
+    }
+
+    function posProdSearchForEdit(q) {
+      const box = document.getElementById('pes-prod-results');
+      if (!q || q.length < 1) { box.innerHTML = ''; return; }
+      const matches = allProducts.filter(p =>
+        (p.name||'').toLowerCase().includes(q.toLowerCase()) ||
+        (p.code||'').toLowerCase().includes(q.toLowerCase()) ||
+        (p.barcode||'').toLowerCase().includes(q.toLowerCase())
+      ).slice(0, 10);
+      box.innerHTML = matches.length ? matches.map(p => {
+        const safeName = (p.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        const safeCode = (p.code||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+        return `<div onclick="addPosEditItem('${safeCode}','${safeName}',${p.selling_price||0})"
+          style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:0.83rem"
+          onmouseover="this.style.background='#f5f3ff'" onmouseout="this.style.background=''">
+          <strong>${p.name}</strong> <span class="text-muted">฿${(p.selling_price||0).toLocaleString()}</span>
+          <span class="text-muted ms-2 small">สต็อก: ${inventory[p.code]||0}</span>
+        </div>`;
+      }).join('') : '<div class="text-muted small py-2 px-3">ไม่พบสินค้า</div>';
+    }
+
+    function addPosEditItem(code, name, price) {
+      const existing = posEditingSaleData.items.find(i => i.product_code === code);
+      if (existing) { existing.quantity++; }
+      else posEditingSaleData.items.push({ product_code: code, product_name: name, quantity: 1, unit_price: price, total: price });
+      document.getElementById('pes-prod-search').value = '';
+      document.getElementById('pes-prod-results').innerHTML = '';
+      renderPosEditItems(); updatePosEditSummary();
+    }
+
+    function updatePosEditSummary() {
+      const sub = (posEditingSaleData?.items||[]).reduce((s,i) => s+(i.unit_price||0)*(i.quantity||1), 0);
+      const disc = Math.max(0, Number(document.getElementById('pes-discount').value)||0);
+      document.getElementById('pes-subtotal-info').textContent = `฿${sub.toLocaleString()}`;
+      document.getElementById('pes-total-preview').textContent = `฿${Math.max(0,sub-disc).toLocaleString()}`;
+    }
+
+    async function posSaveSaleEdit() {
+      if (!posEditingSaleId || !posEditingSaleData) return;
+      const items = posEditingSaleData.items;
+      const sub = items.reduce((s,i) => s+(i.unit_price||0)*(i.quantity||1), 0);
+      const disc = Math.max(0, Number(document.getElementById('pes-discount').value)||0);
+      const total = Math.max(0, sub - disc);
+      const payMethod = document.getElementById('pes-payment').value;
+      const note = document.getElementById('pes-note').value.trim();
+      const btn = document.getElementById('pos-save-edit-btn');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก...';
+      try {
+        const adjMap = {};
+        for (const orig of posEditingSaleData.original_items) {
+          adjMap[orig.product_code] = (adjMap[orig.product_code]||0) + (orig.quantity||0);
+        }
+        for (const item of items) {
+          adjMap[item.product_code] = (adjMap[item.product_code]||0) - (item.quantity||0);
+        }
+        const batch = db.batch();
+        await Promise.all(Object.entries(adjMap).filter(([,v])=>v!==0).map(async ([code,delta]) => {
+          const snap = await db.collection('inventory').where('product_code','==',code).where('branch','==','main').get();
+          if (!snap.empty) batch.update(snap.docs[0].ref, { quantity: FieldValue.increment(delta) });
+        }));
+        await batch.commit();
+
+        await db.collection('sales').doc(posEditingSaleId).update({
+          items: items.map(i => ({ product_code:i.product_code, product_name:i.product_name, quantity:i.quantity, unit_price:i.unit_price, total:(i.unit_price||0)*(i.quantity||0) })),
+          subtotal: sub, discount: disc, total,
+          payment_method: payMethod,
+          edit_note: note,
+          edited_at: FieldValue.serverTimestamp(),
+          edited_by: currentUser.email
+        });
+
+        bootstrap.Modal.getInstance(document.getElementById('posEditSaleModal')).hide();
+        toast('แก้ไขบิลเรียบร้อย ✓', 'success', 3000);
+        await loadProducts();
+      } catch(e) { toast('เกิดข้อผิดพลาด: ' + e.message, 'danger'); }
+      btn.disabled = false; btn.innerHTML = '<i class="bi bi-save me-1"></i>บันทึกการแก้ไข';
     }
 
     // ── Toast ─────────────────────────────────────────────
