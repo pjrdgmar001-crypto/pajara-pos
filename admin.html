@@ -1027,9 +1027,10 @@
       progressEl.style.width = '0%';
 
       try {
-        let done = 0;
+        let added = 0, updated = 0, skipped = 0;
+        const compareFields = ['name','category','subcategory','tag','unit','barcode'];
+        const compareNums = ['selling_price','cost_price'];
         const batchSize = 400;
-        const totalBatches = Math.ceil(validRows.length / batchSize);
 
         for (let i = 0; i < validRows.length; i += batchSize) {
           const batch = db.batch();
@@ -1039,32 +1040,56 @@
             const code = String(r[cols.code] || '').trim();
             if (!code) return;
             const ref = db.collection('products').doc(safeDocId(code));
-            batch.set(ref, {
+
+            const newData = {
               code,
-              name: String(r[cols.name] || '').trim(),
-              category: String(r[cols.category] || '').trim(),
-              subcategory: String(r[cols.subcategory] || '').trim(),
-              tag: String(r[cols.tag] || '').trim(),
+              name:         String(r[cols.name] || '').trim(),
+              category:     String(r[cols.category] || '').trim(),
+              subcategory:  String(r[cols.subcategory] || '').trim(),
+              tag:          String(r[cols.tag] || '').trim(),
               selling_price: Number(r[cols.selling_price]) || 0,
-              cost_price: Number(r[cols.cost_price]) || 0,
-              unit: String(r[cols.unit] || '').trim(),
-              barcode: String(r[cols.barcode] || r[cols.code] || '').trim(),
-              image_url: '',
-              updated_at: FieldValue.serverTimestamp()
-            }, { merge: true });
-            done++;
+              cost_price:   Number(r[cols.cost_price]) || 0,
+              unit:         String(r[cols.unit] || '').trim(),
+              barcode:      String(r[cols.barcode] || r[cols.code] || '').trim(),
+            };
+
+            const existing = prodMap[code];
+            if (!existing) {
+              // สินค้าใหม่ — เพิ่มเข้าระบบ
+              batch.set(ref, { ...newData, image_url: '', updated_at: FieldValue.serverTimestamp() });
+              added++;
+            } else {
+              // สินค้าเดิม — เปรียบเทียบทีละ field
+              const changes = {};
+              for (const f of compareFields) {
+                const nv = newData[f]; const ov = String(existing[f] ?? '');
+                if (nv !== ov) changes[f] = nv;
+              }
+              for (const f of compareNums) {
+                const nv = newData[f]; const ov = Number(existing[f] ?? 0);
+                if (nv !== ov) changes[f] = nv;
+              }
+              if (Object.keys(changes).length > 0) {
+                batch.update(ref, { ...changes, updated_at: FieldValue.serverTimestamp() });
+                updated++;
+              } else {
+                skipped++;
+              }
+            }
           });
 
           await batch.commit();
 
-          const pct = Math.round(((i + chunk.length) / validRows.length) * 100);
+          const done = added + updated + skipped;
+          const pct = Math.round((done / validRows.length) * 100);
           progressEl.style.width = pct + '%';
-          toast(`นำเข้าแล้ว ${done}/${validRows.length} รายการ (${pct}%)`, 'info', 1500);
+          if (done % 400 === 0 || done === validRows.length)
+            toast(`ประมวลผลแล้ว ${done}/${validRows.length} (${pct}%)`, 'info', 1200);
         }
 
         progressEl.style.width = '100%';
         setTimeout(() => progressEl.remove(), 1000);
-        toast(`✅ นำเข้าสินค้า ${done} รายการสำเร็จ!`, 'success', 5000);
+        toast(`✅ เพิ่มใหม่ ${added} | อัปเดต ${updated} | ไม่เปลี่ยนแปลง ${skipped} รายการ`, 'success', 6000);
         input.value = '';
         await loadProducts();
 
@@ -1741,7 +1766,7 @@
       const box = document.getElementById('intake-suggest');
       const q = val.toLowerCase().trim();
       if (q.length < 2) { box.style.display = 'none'; return; }
-      const matches = Object.values(prodMap).filter(p =>
+      const matches = allProducts.filter(p =>
         (p.name||'').toLowerCase().includes(q) ||
         (p.code||'').toLowerCase().includes(q) ||
         (p.barcode||'').toLowerCase().includes(q)
