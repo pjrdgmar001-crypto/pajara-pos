@@ -374,6 +374,16 @@
         <p>ดูรายละเอียดการขายแต่ละวัน</p>
       </div>
 
+      <div class="data-table mb-3">
+        <div class="table-header border-bottom d-flex align-items-center gap-2 flex-wrap">
+          <i class="bi bi-search text-muted"></i>
+          <strong class="me-1">ค้นหาเลขบิล:</strong>
+          <input type="text" class="form-control form-control-sm" id="receipt-search" placeholder="R20260511xxxxx" style="max-width:220px">
+          <button class="btn btn-sm btn-outline-primary" onclick="searchByReceiptNo()">ค้นหา</button>
+          <div id="receipt-search-result" class="w-100"></div>
+        </div>
+      </div>
+
       <div class="data-table">
         <div class="table-header border-bottom d-flex justify-content-between align-items-center flex-wrap gap-2">
           <div class="d-flex gap-2 align-items-center">
@@ -585,6 +595,48 @@
           <button type="button" class="btn btn-primary" id="save-prod-btn" onclick="saveProduct()">
             <i class="bi bi-save me-1"></i>บันทึก
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Sale Modal -->
+  <div class="modal fade" id="editSaleModal" tabindex="-1">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>แก้ไขบิล <span id="es-receipt-no" class="text-muted fs-6"></span></h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning py-2 small mb-3"><i class="bi bi-exclamation-triangle me-1"></i>การแก้ไขจะเปลี่ยนเฉพาะ <strong>ส่วนลด / ยอดสุทธิ / วิธีชำระ</strong> ในฐานข้อมูล ไม่กระทบสต็อกสินค้า</div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">ยอดรวม (แก้ไขไม่ได้)</label>
+            <div class="form-control bg-light" id="es-subtotal">฿0</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">ส่วนลด (฿)</label>
+            <input type="number" class="form-control" id="es-discount" min="0" oninput="updateEditTotal()">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">ยอดสุทธิ (คำนวณอัตโนมัติ)</label>
+            <div class="form-control bg-light fw-bold" style="color:#7c3aed" id="es-total-preview">฿0</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">วิธีชำระเงิน</label>
+            <select class="form-select" id="es-payment">
+              <option value="cash">💵 เงินสด</option>
+              <option value="transfer">📱 โอน / QR Code</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">หมายเหตุการแก้ไข</label>
+            <input type="text" class="form-control" id="es-note" placeholder="เหตุผลที่แก้ไข เช่น แก้ส่วนลดผิด">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+          <button class="btn btn-warning" id="save-edit-sale-btn" onclick="saveSaleEdit()"><i class="bi bi-save me-1"></i>บันทึกการแก้ไข</button>
         </div>
       </div>
     </div>
@@ -1254,12 +1306,85 @@
           <td class="fw-bold">฿${(s.total||0).toLocaleString()}</td>
           <td>${s.payment_method === 'cash' ? '💵 เงินสด' : '📱 โอน'}</td>
           <td><small>${s.cashier||'-'}</small></td>
-          <td>
+          <td style="white-space:nowrap">
             <button class="btn btn-sm btn-outline-secondary me-1" onclick='showSaleDetail(${JSON.stringify(s)})'>ดู</button>
+            <button class="btn btn-sm btn-outline-warning me-1" onclick='openEditSale(${JSON.stringify(s)})'><i class="bi bi-pencil"></i></button>
             <button class="btn btn-sm btn-outline-danger" onclick="deleteSale('${s.id}')"><i class="bi bi-trash"></i></button>
           </td>
         </tr>`;
       }).join('') : '<tr><td colspan="9" class="text-center py-4 text-muted">ไม่มีรายการขายในวันนี้</td></tr>';
+    }
+
+    async function searchByReceiptNo() {
+      const rno = document.getElementById('receipt-search').value.trim();
+      if (!rno) { toast('กรุณาใส่เลขบิล', 'warning'); return; }
+      const el = document.getElementById('receipt-search-result');
+      el.innerHTML = '<div class="py-2 text-muted small"><div class="spinner-border spinner-border-sm me-1"></div>กำลังค้นหา...</div>';
+      const snap = await db.collection('sales').where('receipt_no','==',rno).limit(1).get();
+      if (snap.empty) {
+        el.innerHTML = `<div class="alert alert-warning mt-2 py-2 small">ไม่พบบิล: <strong>${rno}</strong></div>`;
+        return;
+      }
+      const s = { id: snap.docs[0].id, ...snap.docs[0].data() };
+      const t = s.created_at?.toDate?.().toLocaleString('th-TH') || '-';
+      el.innerHTML = `
+        <div class="alert alert-success mt-2 py-2">
+          <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div>
+              <strong>${s.receipt_no}</strong> | ${t} | แคชเชียร์: ${s.cashier||'-'}<br>
+              <small>ยอดรวม ฿${(s.subtotal||0).toLocaleString()} | ส่วนลด ฿${(s.discount||0).toLocaleString()} | <strong>ยอดสุทธิ ฿${(s.total||0).toLocaleString()}</strong> | ${s.payment_method==='cash'?'💵 เงินสด':'📱 โอน'}</small>
+            </div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-secondary" onclick='showSaleDetail(${JSON.stringify(s)})'>ดูรายละเอียด</button>
+              <button class="btn btn-sm btn-warning" onclick='openEditSale(${JSON.stringify(s)})'><i class="bi bi-pencil me-1"></i>แก้ไขบิล</button>
+            </div>
+          </div>
+        </div>`;
+    }
+
+    let editingSaleId = null;
+
+    function openEditSale(s) {
+      editingSaleId = s.id;
+      document.getElementById('es-receipt-no').textContent = s.receipt_no;
+      document.getElementById('es-subtotal').textContent = `฿${(s.subtotal||0).toLocaleString()}`;
+      document.getElementById('es-discount').value = s.discount || 0;
+      document.getElementById('es-payment').value = s.payment_method || 'transfer';
+      document.getElementById('es-note').value = s.edit_note || '';
+      const total = Math.max(0, (s.subtotal||0) - (s.discount||0));
+      document.getElementById('es-total-preview').textContent = `฿${total.toLocaleString()}`;
+      new bootstrap.Modal(document.getElementById('editSaleModal')).show();
+    }
+
+    function updateEditTotal() {
+      const sub = parseFloat(document.getElementById('es-subtotal').textContent.replace(/[฿,]/g,'')) || 0;
+      const disc = Math.max(0, Number(document.getElementById('es-discount').value)||0);
+      document.getElementById('es-total-preview').textContent = `฿${Math.max(0, sub-disc).toLocaleString()}`;
+    }
+
+    async function saveSaleEdit() {
+      if (!editingSaleId) return;
+      const sub = parseFloat(document.getElementById('es-subtotal').textContent.replace(/[฿,]/g,'')) || 0;
+      const disc = Math.max(0, Number(document.getElementById('es-discount').value)||0);
+      const total = Math.max(0, sub - disc);
+      const payMethod = document.getElementById('es-payment').value;
+      const note = document.getElementById('es-note').value.trim();
+      const btn = document.getElementById('save-edit-sale-btn');
+      btn.disabled = true;
+      try {
+        await db.collection('sales').doc(editingSaleId).update({
+          discount: disc, total,
+          payment_method: payMethod,
+          edit_note: note,
+          edited_at: FieldValue.serverTimestamp(),
+          edited_by: currentUser.email
+        });
+        bootstrap.Modal.getInstance(document.getElementById('editSaleModal')).hide();
+        toast('แก้ไขบิลเรียบร้อย', 'success');
+        loadSalesHistory();
+        document.getElementById('receipt-search-result').innerHTML = '';
+      } catch(e) { toast('เกิดข้อผิดพลาด: ' + e.message, 'danger'); }
+      btn.disabled = false;
     }
 
     async function deleteSale(id) {
