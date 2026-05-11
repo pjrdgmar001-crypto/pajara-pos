@@ -438,7 +438,7 @@
 
   <!-- Payment Modal -->
   <div class="modal fade" id="payModal" tabindex="-1" data-bs-backdrop="static">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
       <div class="modal-content">
         <div class="modal-header border-0 pb-0">
           <h5 class="modal-title fw-bold"><i class="bi bi-wallet2 me-2"></i>ชำระเงิน</h5>
@@ -469,11 +469,48 @@
 
           <!-- Transfer/QR section -->
           <div id="sec-transfer">
-            <div class="text-center">
-              <div class="mb-1 text-muted">ยอดที่ต้องชำระ</div>
-              <div class="fs-2 fw-bold mb-3" style="color:#7c3aed" id="qr-total-display">฿0</div>
-              <div id="qr-canvas-wrap" class="d-flex justify-content-center mb-2"></div>
-              <small class="text-muted" id="pp-info"></small>
+            <div style="max-width:340px;margin:0 auto;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.15);border:1px solid #e5e7eb">
+              <!-- Header Thai QR Payment -->
+              <div style="background:#1a3a6b;padding:12px 16px;display:flex;align-items:center;gap:10px">
+                <div style="background:white;border-radius:8px;padding:4px 8px;display:flex;align-items:center;gap:6px">
+                  <svg width="22" height="22" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="40" height="40" rx="6" fill="#1a3a6b"/>
+                    <rect x="6" y="6" width="12" height="12" rx="1" fill="white"/>
+                    <rect x="8" y="8" width="8" height="8" rx="0.5" fill="#1a3a6b"/>
+                    <rect x="22" y="6" width="12" height="12" rx="1" fill="white"/>
+                    <rect x="24" y="8" width="8" height="8" rx="0.5" fill="#1a3a6b"/>
+                    <rect x="6" y="22" width="12" height="12" rx="1" fill="white"/>
+                    <rect x="8" y="24" width="8" height="8" rx="0.5" fill="#1a3a6b"/>
+                    <rect x="22" y="22" width="5" height="5" fill="white"/>
+                    <rect x="29" y="22" width="5" height="5" fill="white"/>
+                    <rect x="22" y="29" width="5" height="5" fill="white"/>
+                    <rect x="29" y="29" width="5" height="5" fill="white"/>
+                  </svg>
+                  <span style="color:#1a3a6b;font-weight:800;font-size:0.75rem;letter-spacing:0.5px">THAI QR<br>PAYMENT</span>
+                </div>
+              </div>
+              <!-- Payment logos -->
+              <div style="background:white;padding:8px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid #f1f5f9">
+                <div style="border:1.5px solid #d1d5db;border-radius:5px;padding:2px 7px;font-size:0.7rem;font-weight:800;color:#003087;letter-spacing:-0.5px;white-space:nowrap">Prompt<span style="color:#e31837">Pay</span></div>
+                <div style="font-size:1rem;font-weight:900;color:#1a1f71;letter-spacing:-1px">VISA</div>
+                <div style="display:flex;position:relative;width:28px;height:18px">
+                  <div style="position:absolute;left:0;width:18px;height:18px;background:#eb001b;border-radius:50%;opacity:0.9"></div>
+                  <div style="position:absolute;left:10px;width:18px;height:18px;background:#f79e1b;border-radius:50%;opacity:0.9"></div>
+                </div>
+                <div style="font-size:0.65rem;font-weight:800;color:#e31837;border:1.5px solid #e31837;border-radius:3px;padding:1px 4px">Union<br>Pay</div>
+              </div>
+              <!-- QR code -->
+              <div style="background:white;padding:16px 20px 10px;text-align:center">
+                <div id="qr-canvas-wrap" style="display:flex;justify-content:center;align-items:center;min-height:220px"></div>
+              </div>
+              <!-- Store info & amount -->
+              <div style="background:white;padding:0 20px 16px;text-align:center">
+                <div style="font-size:1.3rem;font-weight:800;color:#111;margin-bottom:2px" id="qr-store-name">ร้านค้า</div>
+                <div style="font-size:0.82rem;color:#555;margin-bottom:2px" id="qr-acct-name"></div>
+                <div style="margin:10px 0 4px;font-size:0.82rem;color:#666">ยอดที่ต้องชำระ</div>
+                <div style="font-size:2rem;font-weight:800;color:#1a3a6b" id="qr-total-display">฿0</div>
+                <small class="text-muted" id="pp-info" style="font-size:0.72rem"></small>
+              </div>
             </div>
           </div>
 
@@ -898,6 +935,9 @@
       const fmt = total.toLocaleString('th-TH', { minimumFractionDigits: 2 });
       document.getElementById('modal-total').textContent = `฿${fmt}`;
       document.getElementById('qr-total-display').textContent = `฿${fmt}`;
+      document.getElementById('qr-store-name').textContent = settings.store_name || 'ร้านค้า';
+      const acctName = settings.account_name ? `บัญชี: ${settings.account_name}` : '';
+      document.getElementById('qr-acct-name').textContent = acctName;
       document.getElementById('received-amt').value = '';
       document.getElementById('change-display').className = 'alert mt-2 d-none';
       try { buildQR(total); } catch(e) {
