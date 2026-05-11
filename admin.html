@@ -868,59 +868,32 @@
     }
 
     // ── Settings ──────────────────────────────────────────
-    let qrImgFile = null;
-    let pendingQrUrl = null;
-    let qrUploadPromise = null;
-
-    function compressImage(file, maxPx = 900, quality = 0.82) {
-      return new Promise(resolve => {
-        const img = new Image();
-        img.onload = () => {
-          const ratio = Math.min(maxPx / img.width, maxPx / img.height, 1);
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.round(img.width * ratio);
-          canvas.height = Math.round(img.height * ratio);
-          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          canvas.toBlob(resolve, 'image/jpeg', quality);
-        };
-        img.src = URL.createObjectURL(file);
-      });
-    }
+    let pendingQrBase64 = null;
 
     async function previewQrImg(input) {
       const file = input.files[0]; if (!file) return;
-      qrImgFile = file;
-      pendingQrUrl = null;
-
-      // แสดง preview ทันที
-      const reader = new FileReader();
-      reader.onload = e => {
-        document.getElementById('qr-img-preview').innerHTML =
-          `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:contain">`;
-      };
-      reader.readAsDataURL(file);
-
-      // เริ่ม compress + upload ทันทีในพื้นหลัง
       const status = document.getElementById('qr-img-status');
-      status.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลัง compress และอัปโหลด...';
+      status.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลัง compress...';
+      pendingQrBase64 = null;
 
-      qrUploadPromise = (async () => {
-        try {
-          const blob = await compressImage(file);
-          const ref = storage.ref(`settings/qr_payment_${Date.now()}.jpg`);
-          const task = ref.put(blob, { contentType: 'image/jpeg' });
-          task.on('state_changed', snap => {
-            const pct = Math.round(snap.bytesTransferred / snap.totalBytes * 100);
-            status.innerHTML = `<div class="progress" style="height:6px"><div class="progress-bar bg-success" style="width:${pct}%"></div></div><small class="text-success">อัปโหลด ${pct}%</small>`;
-          });
-          await task;
-          pendingQrUrl = await ref.getDownloadURL();
-          status.innerHTML = '<span class="text-success fw-semibold">✅ อัปโหลดสำเร็จ — กด "บันทึกการตั้งค่า" เพื่อใช้งาน</span>';
-        } catch(e) {
-          status.innerHTML = `<span class="text-danger">❌ อัปโหลดล้มเหลว: ${e.message}</span>`;
-          pendingQrUrl = null;
-        }
-      })();
+      try {
+        // Compress ให้เล็กลง (max 600px, 75% quality)
+        const canvas = document.createElement('canvas');
+        const img = new Image();
+        await new Promise(res => { img.onload = res; img.src = URL.createObjectURL(file); });
+        const ratio = Math.min(600 / img.width, 600 / img.height, 1);
+        canvas.width = Math.round(img.width * ratio);
+        canvas.height = Math.round(img.height * ratio);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const base64 = canvas.toDataURL('image/jpeg', 0.75);
+
+        pendingQrBase64 = base64;
+        document.getElementById('qr-img-preview').innerHTML =
+          `<img src="${base64}" style="width:100%;height:100%;object-fit:contain">`;
+        status.innerHTML = '<span class="text-success fw-semibold">✅ พร้อมบันทึก — กด "บันทึกการตั้งค่า"</span>';
+      } catch(e) {
+        status.innerHTML = `<span class="text-danger">❌ ผิดพลาด: ${e.message}</span>`;
+      }
     }
 
     async function loadSettings() {
@@ -956,16 +929,9 @@
           account_name: document.getElementById('s-acct-name').value,
           low_stock_threshold: Number(document.getElementById('s-low-stock').value) || 5
         };
-        if (qrUploadPromise && !pendingQrUrl) {
-          // รอให้อัปโหลดที่ค้างอยู่เสร็จก่อน
-          document.getElementById('qr-img-status').textContent = 'รอการอัปโหลดเสร็จ...';
-          await qrUploadPromise;
-        }
-        if (pendingQrUrl) {
-          data.qr_image_url = pendingQrUrl;
-          pendingQrUrl = null;
-          qrImgFile = null;
-          qrUploadPromise = null;
+        if (pendingQrBase64) {
+          data.qr_image_url = pendingQrBase64;
+          pendingQrBase64 = null;
         }
         await db.collection('settings').doc('main').set(data, { merge: true });
         settings = { ...settings, ...data };
