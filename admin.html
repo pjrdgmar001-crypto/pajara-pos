@@ -519,16 +519,34 @@
       </div>
 
       <div class="settings-card">
-        <h6><i class="bi bi-qr-code me-2"></i>PromptPay / การชำระเงิน</h6>
+        <h6><i class="bi bi-qr-code me-2"></i>QR Code ชำระเงิน</h6>
         <div class="row g-3">
-          <div class="col-md-6">
-            <label class="form-label">หมายเลข PromptPay (เบอร์โทร หรือ เลขบัตร 13 หลัก)</label>
-            <input type="text" class="form-control" id="s-promptpay" placeholder="0812345678">
-            <small class="text-muted">จะแสดง QR Code ให้ลูกค้าโอนเงิน</small>
+          <div class="col-md-5">
+            <label class="form-label fw-semibold">อัปโหลดรูป QR Payment <span class="text-danger">*</span></label>
+            <div class="mb-2">
+              <div id="qr-img-preview" style="width:100%;max-width:240px;height:240px;border:2px dashed #c7d2fe;border-radius:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#fafafe;cursor:pointer" onclick="document.getElementById('qr-img-file').click()">
+                <div id="qr-img-placeholder" class="text-center text-muted small"><i class="bi bi-qr-code" style="font-size:2rem;display:block;margin-bottom:6px;color:#a5b4fc"></i>คลิกเพื่ออัปโหลด<br>รูป QR จากธนาคาร</div>
+              </div>
+            </div>
+            <input type="file" id="qr-img-file" accept="image/*" class="d-none" onchange="previewQrImg(this)">
+            <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('qr-img-file').click()">
+              <i class="bi bi-upload me-1"></i>เลือกรูป QR
+            </button>
+            <div id="qr-img-status" class="small text-muted mt-1"></div>
+            <div class="alert alert-info py-2 mt-2 small"><i class="bi bi-info-circle me-1"></i>อัปโหลดรูป Thai QR Payment จากธนาคาร (เช่น KBank, SCB) รูปนี้จะแสดงตอนลูกค้าชำระเงิน</div>
           </div>
-          <div class="col-md-6">
-            <label class="form-label">ชื่อบัญชี (แสดงใต้ QR)</label>
-            <input type="text" class="form-control" id="s-acct-name" placeholder="ชื่อ-นามสกุล">
+          <div class="col-md-7">
+            <div class="row g-3">
+              <div class="col-12">
+                <label class="form-label">ชื่อบัญชี (แสดงใต้ QR)</label>
+                <input type="text" class="form-control" id="s-acct-name" placeholder="เช่น บจก. ปาจารา">
+              </div>
+              <div class="col-12">
+                <label class="form-label">หมายเลข PromptPay (สำรอง — ถ้าไม่ได้อัปโหลดรูป)</label>
+                <input type="text" class="form-control" id="s-promptpay" placeholder="0812345678">
+                <small class="text-muted">ใช้เฉพาะกรณีไม่มีรูป QR</small>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -850,6 +868,19 @@
     }
 
     // ── Settings ──────────────────────────────────────────
+    let qrImgFile = null;
+
+    function previewQrImg(input) {
+      const file = input.files[0]; if (!file) return;
+      qrImgFile = file;
+      const reader = new FileReader();
+      reader.onload = e => {
+        document.getElementById('qr-img-preview').innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:contain">`;
+      };
+      reader.readAsDataURL(file);
+      document.getElementById('qr-img-status').textContent = `ไฟล์: ${file.name} (กด "บันทึกการตั้งค่า" เพื่ออัปโหลด)`;
+    }
+
     async function loadSettings() {
       const d = await db.collection('settings').doc('main').get();
       settings = d.exists ? d.data() : {};
@@ -862,23 +893,41 @@
       document.getElementById('s-promptpay').value = settings.promptpay_id || '';
       document.getElementById('s-acct-name').value = settings.account_name || '';
       document.getElementById('s-low-stock').value = settings.low_stock_threshold || 5;
+      if (settings.qr_image_url) {
+        document.getElementById('qr-img-preview').innerHTML = `<img src="${settings.qr_image_url}" style="width:100%;height:100%;object-fit:contain">`;
+        document.getElementById('qr-img-placeholder')?.remove();
+        document.getElementById('qr-img-status').textContent = 'มีรูป QR อยู่แล้ว (อัปโหลดใหม่เพื่อเปลี่ยน)';
+      }
     }
 
     async function saveSettings() {
-      const data = {
-        store_name: document.getElementById('s-store-name').value,
-        branch_name: document.getElementById('s-branch-name').value,
-        phone: document.getElementById('s-phone').value,
-        address: document.getElementById('s-address').value,
-        receipt_footer: document.getElementById('s-receipt-footer').value,
-        promptpay_id: document.getElementById('s-promptpay').value,
-        account_name: document.getElementById('s-acct-name').value,
-        low_stock_threshold: Number(document.getElementById('s-low-stock').value) || 5
-      };
-      await db.collection('settings').doc('main').set(data, { merge: true });
-      settings = { ...settings, ...data };
-      document.getElementById('sb-branch').textContent = data.branch_name || 'Admin';
-      toast('บันทึกการตั้งค่าเรียบร้อย', 'success');
+      const saveBtn = document.querySelector('[onclick="saveSettings()"]');
+      if (saveBtn) { saveBtn.disabled = true; saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก...'; }
+      try {
+        const data = {
+          store_name: document.getElementById('s-store-name').value,
+          branch_name: document.getElementById('s-branch-name').value,
+          phone: document.getElementById('s-phone').value,
+          address: document.getElementById('s-address').value,
+          receipt_footer: document.getElementById('s-receipt-footer').value,
+          promptpay_id: document.getElementById('s-promptpay').value,
+          account_name: document.getElementById('s-acct-name').value,
+          low_stock_threshold: Number(document.getElementById('s-low-stock').value) || 5
+        };
+        if (qrImgFile) {
+          document.getElementById('qr-img-status').textContent = 'กำลังอัปโหลดรูป QR...';
+          const ref = storage.ref(`settings/qr_payment_${Date.now()}.${qrImgFile.name.split('.').pop()}`);
+          await ref.put(qrImgFile);
+          data.qr_image_url = await ref.getDownloadURL();
+          qrImgFile = null;
+          document.getElementById('qr-img-status').textContent = '✅ อัปโหลดรูป QR เรียบร้อย';
+        }
+        await db.collection('settings').doc('main').set(data, { merge: true });
+        settings = { ...settings, ...data };
+        document.getElementById('sb-branch').textContent = data.branch_name || 'Admin';
+        toast('บันทึกการตั้งค่าเรียบร้อย', 'success');
+      } catch(e) { toast('เกิดข้อผิดพลาด: ' + e.message, 'danger'); }
+      if (saveBtn) { saveBtn.disabled = false; saveBtn.innerHTML = '<i class="bi bi-save me-1"></i>บันทึกการตั้งค่า'; }
     }
 
     // แปลงรหัสสินค้าให้ใช้เป็น Firestore Document ID ได้ (ไม่มี / . ฯลฯ)

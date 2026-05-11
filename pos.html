@@ -968,10 +968,25 @@
 
     function buildQR(amount) {
       const wrap = document.getElementById('qr-canvas-wrap');
+
+      // ถ้ามีรูป QR อัปโหลดจากธนาคาร → แสดงรูปนั้นเลย (แนะนำ)
+      if (settings.qr_image_url) {
+        const img = document.createElement('img');
+        img.src = settings.qr_image_url;
+        img.alt = 'QR Payment';
+        img.style.cssText = 'width:260px;max-width:100%;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.1)';
+        img.onerror = () => { wrap.innerHTML = '<div class="alert alert-warning small text-center">โหลดรูป QR ไม่ได้</div>'; };
+        wrap.innerHTML = '';
+        wrap.appendChild(img);
+        document.getElementById('pp-info').textContent = settings.account_name ? `บัญชี: ${settings.account_name}` : '';
+        return;
+      }
+
+      // Fallback: generate PromptPay QR จาก promptpay_id
       wrap.innerHTML = '<div class="text-center py-2 text-muted small"><div class="spinner-border spinner-border-sm me-1"></div>กำลังสร้าง QR...</div>';
       const pp = (settings.promptpay_id || '').trim();
       if (!pp) {
-        wrap.innerHTML = '<div class="alert alert-warning py-2 small text-center"><i class="bi bi-qr-code me-1"></i>ยังไม่ตั้งค่า PromptPay<br>ไปที่ <strong>Admin → ตั้งค่า → PromptPay</strong><br><small class="text-muted">หรือชำระด้วยเงินสดแทน</small></div>';
+        wrap.innerHTML = '<div class="alert alert-warning py-2 small text-center"><i class="bi bi-qr-code me-1"></i>ยังไม่ตั้งค่า QR<br>ไปที่ <strong>Admin → ตั้งค่า</strong> เพื่ออัปโหลดรูป QR<br><small class="text-muted">หรือชำระด้วยเงินสดแทน</small></div>';
         return;
       }
       document.getElementById('pp-info').textContent = `PromptPay: ${pp}`;
@@ -979,9 +994,7 @@
       const img = document.createElement('img');
       img.style.cssText = 'width:220px;height:220px;border-radius:10px;border:2px solid #e5e7eb';
       img.alt = 'PromptPay QR';
-      img.onerror = () => {
-        wrap.innerHTML = '<div class="alert alert-danger py-2 small">สร้าง QR ไม่สำเร็จ กรุณาตรวจสอบการเชื่อมต่ออินเทอร์เน็ต</div>';
-      };
+      img.onerror = () => { wrap.innerHTML = '<div class="alert alert-danger py-2 small">สร้าง QR ไม่สำเร็จ</div>'; };
       img.onload = () => { wrap.innerHTML = ''; wrap.appendChild(img); };
       img.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&data=${encodeURIComponent(data)}`;
     }
