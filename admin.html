@@ -87,7 +87,7 @@
     .stock-out { color: #dc2626; }
 
     /* Chart */
-    #sales-chart-wrap { height: 240px; position: relative; }
+    #sales-chart-wrap { height: 280px; position: relative; }
 
     /* Settings form */
     .settings-card { background: white; border-radius: 14px; padding: 24px; border: 1px solid #e5e7eb; margin-bottom: 16px; }
@@ -180,16 +180,21 @@
           <p id="dash-date-label">ภาพรวมยอดขายและสถานะสต็อก</p>
         </div>
         <div class="d-flex gap-2 align-items-center flex-wrap">
-          <input type="date" class="form-control form-control-sm" id="dash-date" style="width:160px">
+          <span class="text-muted small fw-semibold">จาก</span>
+          <input type="date" class="form-control form-control-sm" id="dash-date-from" style="width:148px">
+          <span class="text-muted small fw-semibold">ถึง</span>
+          <input type="date" class="form-control form-control-sm" id="dash-date-to" style="width:148px">
           <button class="btn btn-sm btn-primary" onclick="loadDashboard()"><i class="bi bi-search me-1"></i>ดูข้อมูล</button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="setDashToday()"><i class="bi bi-calendar-today me-1"></i>วันนี้</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="setDashToday()">วันนี้</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="setDashThisWeek()">สัปดาห์นี้</button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="setDashThisMonth()">เดือนนี้</button>
         </div>
       </div>
       <div class="row g-3 mb-4" id="dash-stats">
         <div class="col-md-3 col-6"><div class="stat-card"><div class="stat-icon" style="background:#ede9fe;color:#7c3aed"><i class="bi bi-currency-dollar"></i></div><div><div class="stat-value" id="d-revenue">-</div><div class="stat-label">ยอดขายวันนี้ (฿)</div></div></div></div>
         <div class="col-md-3 col-6"><div class="stat-card"><div class="stat-icon" style="background:#dcfce7;color:#16a34a"><i class="bi bi-receipt"></i></div><div><div class="stat-value" id="d-orders">-</div><div class="stat-label">ออเดอร์วันนี้</div></div></div></div>
         <div class="col-md-3 col-6"><div class="stat-card"><div class="stat-icon" style="background:#dbeafe;color:#2563eb"><i class="bi bi-box-seam"></i></div><div><div class="stat-value" id="d-products">-</div><div class="stat-label">สินค้าทั้งหมด</div></div></div></div>
-        <div class="col-md-3 col-6"><div class="stat-card"><div class="stat-icon" style="background:#fef9c3;color:#ca8a04"><i class="bi bi-exclamation-triangle"></i></div><div><div class="stat-value" id="d-lowstock">-</div><div class="stat-label">สต็อกใกล้หมด</div></div></div></div>
+        <div class="col-md-3 col-6" onclick="showLowStockModal()" style="cursor:pointer" title="คลิกดูรายละเอียด"><div class="stat-card" style="border-color:#fde68a;transition:box-shadow 0.15s" onmouseover="this.style.boxShadow='0 4px 14px rgba(202,138,4,0.25)'" onmouseout="this.style.boxShadow=''"><div class="stat-icon" style="background:#fef9c3;color:#ca8a04"><i class="bi bi-exclamation-triangle"></i></div><div><div class="stat-value" id="d-lowstock">-</div><div class="stat-label">สต็อกใกล้หมด <i class="bi bi-arrow-right-circle" style="font-size:0.75rem;opacity:0.7"></i></div></div></div></div>
       </div>
 
       <div class="row g-3">
@@ -199,14 +204,42 @@
               <strong id="chart-label">ยอดขายรายชั่วโมง (วันนี้)</strong>
               <button class="btn btn-sm btn-outline-secondary" onclick="loadDashboard()"><i class="bi bi-arrow-clockwise"></i></button>
             </div>
-            <div style="padding:16px"><div id="sales-chart-wrap"><canvas id="sales-chart"></canvas></div></div>
+            <div style="padding:16px"><div id="sales-chart-wrap" style="height:280px;position:relative"><canvas id="sales-chart"></canvas></div></div>
           </div>
         </div>
         <div class="col-lg-4">
           <div class="data-table">
             <div class="p-3 border-bottom"><strong>รายการขายล่าสุด</strong></div>
-            <div id="recent-sales" style="max-height:260px;overflow-y:auto">
+            <div id="recent-sales" style="max-height:320px;overflow-y:auto">
               <div class="text-center py-4 text-muted">กำลังโหลด...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3 mt-1">
+        <div class="col-12">
+          <div class="data-table">
+            <div class="p-3 border-bottom d-flex align-items-center gap-2">
+              <i class="bi bi-trophy-fill" style="color:#f59e0b;font-size:1.1rem"></i>
+              <strong>สินค้าขายดี 10 อันดับแรก</strong>
+              <span class="badge ms-1" id="top-prod-period-badge" style="background:#ede9fe;color:#7c3aed;font-weight:500;font-size:0.75rem"></span>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead>
+                  <tr>
+                    <th style="width:44px">#</th>
+                    <th>SKU</th>
+                    <th>ชื่อสินค้า</th>
+                    <th class="text-center">ขายได้ (ชิ้น)</th>
+                    <th class="text-end">ยอดรวม (฿)</th>
+                  </tr>
+                </thead>
+                <tbody id="top-products-tbody">
+                  <tr><td colspan="5" class="text-center py-3 text-muted">กำลังโหลด...</td></tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -822,6 +855,26 @@
     </div>
   </div>
 
+  <!-- Low Stock Modal -->
+  <div class="modal fade" id="lowStockModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>สินค้าสต็อกใกล้หมด</h5>
+          <button class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body p-0" id="low-stock-modal-body">
+          <div class="text-center py-4 text-muted">กำลังโหลด...</div>
+        </div>
+        <div class="modal-footer">
+          <small class="text-muted me-auto" id="low-stock-modal-note"></small>
+          <button class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
+          <button class="btn btn-outline-primary btn-sm" onclick="bootstrap.Modal.getInstance(document.getElementById('lowStockModal')).hide();showPage('intake')"><i class="bi bi-arrow-down-circle me-1"></i>นำสินค้าเข้า</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -858,7 +911,9 @@
       loadUsers();
       document.getElementById('loading').style.display = 'none';
       document.getElementById('sales-date').value = new Date().toISOString().slice(0,10);
-      document.getElementById('dash-date').value = new Date().toISOString().slice(0,10);
+      const _todayStr = new Date().toISOString().slice(0,10);
+      document.getElementById('dash-date-from').value = _todayStr;
+      document.getElementById('dash-date-to').value = _todayStr;
     });
 
     // ── Navigation ────────────────────────────────────────
@@ -1751,38 +1806,94 @@
     }
 
     function setDashToday() {
-      document.getElementById('dash-date').value = new Date().toISOString().slice(0,10);
+      const today = new Date().toISOString().slice(0,10);
+      document.getElementById('dash-date-from').value = today;
+      document.getElementById('dash-date-to').value = today;
+      loadDashboard();
+    }
+
+    function setDashThisWeek() {
+      const today = new Date();
+      const d = today.getDay() === 0 ? 7 : today.getDay();
+      const monday = new Date(today); monday.setDate(today.getDate() - d + 1);
+      document.getElementById('dash-date-from').value = monday.toISOString().slice(0,10);
+      document.getElementById('dash-date-to').value = today.toISOString().slice(0,10);
+      loadDashboard();
+    }
+
+    function setDashThisMonth() {
+      const today = new Date();
+      const first = new Date(today.getFullYear(), today.getMonth(), 1);
+      document.getElementById('dash-date-from').value = first.toISOString().slice(0,10);
+      document.getElementById('dash-date-to').value = today.toISOString().slice(0,10);
       loadDashboard();
     }
 
     // ── Dashboard ──────────────────────────────────────────
     async function loadDashboard() {
-      const dateStr = document.getElementById('dash-date')?.value || new Date().toISOString().slice(0,10);
-      const start = new Date(dateStr); start.setHours(0,0,0,0);
-      const end = new Date(dateStr); end.setHours(23,59,59,999);
-      const isToday = dateStr === new Date().toISOString().slice(0,10);
-      const dateLabel = new Date(dateStr).toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'});
-      document.getElementById('dash-date-label').textContent = `ภาพรวมยอดขาย${isToday ? 'วันนี้' : ' ' + dateLabel}`;
-      document.getElementById('chart-label').textContent = `ยอดขายรายชั่วโมง (${isToday ? 'วันนี้' : dateLabel})`;
+      const today = new Date().toISOString().slice(0,10);
+      const fromStr = document.getElementById('dash-date-from')?.value || today;
+      const toStr   = document.getElementById('dash-date-to')?.value   || today;
+      const start = new Date(fromStr); start.setHours(0,0,0,0);
+      const end   = new Date(toStr);   end.setHours(23,59,59,999);
+      const isSingleDay = fromStr === toStr;
+      const isToday = isSingleDay && fromStr === today;
+      const fmt = d => new Date(d).toLocaleDateString('th-TH',{year:'numeric',month:'short',day:'numeric'});
+      const rangeLabel = isSingleDay ? fmt(fromStr) : `${fmt(fromStr)} – ${fmt(toStr)}`;
 
-      const [saleSnap] = await Promise.all([
+      document.getElementById('dash-date-label').textContent = `ภาพรวมยอดขาย${isToday ? 'วันนี้' : ' ' + rangeLabel}`;
+      document.getElementById('chart-label').textContent = isSingleDay
+        ? `ยอดขายรายชั่วโมง (${rangeLabel})`
+        : `ยอดขายรายวัน (${rangeLabel})`;
+
+      // คำนวณช่วงเปรียบเทียบ (ช่วงก่อนหน้าที่มีความยาวเท่ากัน)
+      const rangeMs = end.getTime() - start.getTime();
+      const prevEnd   = new Date(start.getTime() - 1);
+      const prevStart = new Date(prevEnd.getTime() - rangeMs); prevStart.setHours(0,0,0,0);
+
+      const [saleSnap, prevSnap] = await Promise.all([
         db.collection('sales')
           .where('created_at','>=',firebase.firestore.Timestamp.fromDate(start))
-          .where('created_at','<=',firebase.firestore.Timestamp.fromDate(end))
-          .get()
+          .where('created_at','<=',firebase.firestore.Timestamp.fromDate(end)).get(),
+        db.collection('sales')
+          .where('created_at','>=',firebase.firestore.Timestamp.fromDate(prevStart))
+          .where('created_at','<=',firebase.firestore.Timestamp.fromDate(prevEnd)).get()
       ]);
 
       let rev = 0, cnt = 0;
       const hourlyData = new Array(24).fill(0);
+      const prevHourlyData = new Array(24).fill(0);
+      const dailyData = {}, prevDailyData = {};
       const recentList = [];
+      const skuMap = {};
 
       saleSnap.forEach(d => {
         const s = d.data();
         if (s.branch !== 'main') return;
         rev += s.total || 0; cnt++;
-        const h = s.created_at?.toDate?.().getHours?.() ?? 0;
-        hourlyData[h] += s.total || 0;
+        const date = s.created_at?.toDate?.();
+        if (date) {
+          hourlyData[date.getHours()] += s.total || 0;
+          const day = date.toISOString().slice(0,10);
+          dailyData[day] = (dailyData[day] || 0) + (s.total || 0);
+        }
         recentList.push(s);
+        for (const item of (s.items || [])) {
+          const code = item.product_code || ''; if (!code) continue;
+          if (!skuMap[code]) skuMap[code] = { name: item.product_name || code, qty: 0, total: 0 };
+          skuMap[code].qty   += Number(item.quantity) || 0;
+          skuMap[code].total += (Number(item.unit_price) || 0) * (Number(item.quantity) || 0);
+        }
+      });
+
+      prevSnap.forEach(d => {
+        const s = d.data();
+        if (s.branch !== 'main') return;
+        const date = s.created_at?.toDate?.();
+        if (!date) return;
+        prevHourlyData[date.getHours()] += s.total || 0;
+        const day = date.toISOString().slice(0,10);
+        prevDailyData[day] = (prevDailyData[day] || 0) + (s.total || 0);
       });
 
       document.getElementById('d-revenue').textContent = `฿${rev.toLocaleString()}`;
@@ -1790,34 +1901,108 @@
       document.getElementById('d-products').textContent = allProducts.length.toLocaleString();
 
       const lowThreshold = settings.low_stock_threshold || 5;
-      const low = Object.entries(inventory).filter(([c,q]) => q > 0 && q <= lowThreshold).length;
+      const low = Object.entries(inventory).filter(([c,q]) => q >= 0 && q <= lowThreshold).length;
       document.getElementById('d-lowstock').textContent = low;
 
-      // Recent sales
-      const recent = recentList.slice(-8).reverse();
-      document.getElementById('recent-sales').innerHTML = recent.length ? recent.map(s => `
-        <div class="border-bottom p-2 d-flex justify-content-between align-items-center">
-          <div><div class="small fw-semibold">${s.receipt_no}</div>
-          <div class="text-muted" style="font-size:0.75rem">${s.created_at?.toDate?.().toLocaleTimeString('th-TH') || '-'}</div></div>
-          <div class="fw-bold" style="color:#7c3aed">฿${(s.total||0).toLocaleString()}</div>
-        </div>
-      `).join('') : '<div class="text-center py-4 text-muted">ยังไม่มีรายการ</div>';
+      // Top 10 สินค้าขายดี
+      const medals = ['🥇','🥈','🥉'];
+      const top10 = Object.entries(skuMap).sort((a,b) => b[1].qty - a[1].qty).slice(0,10);
+      const badge = document.getElementById('top-prod-period-badge');
+      if (badge) badge.textContent = rangeLabel;
+      document.getElementById('top-products-tbody').innerHTML = top10.length
+        ? top10.map(([code,v],i) => `<tr>
+            <td class="fw-bold text-muted">${medals[i] || (i+1)}</td>
+            <td><code style="color:#7c3aed;font-size:0.82rem">${code}</code></td>
+            <td>${v.name}</td>
+            <td class="text-center fw-semibold">${v.qty.toLocaleString()} ชิ้น</td>
+            <td class="text-end fw-semibold">฿${v.total.toLocaleString()}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="5" class="text-center py-3 text-muted">ไม่มีข้อมูลการขายในช่วงนี้</td></tr>';
 
-      // Chart
+      // รายการขายล่าสุด
+      recentList.sort((a,b) => (b.created_at?.seconds||0) - (a.created_at?.seconds||0));
+      document.getElementById('recent-sales').innerHTML = recentList.slice(0,8).length
+        ? recentList.slice(0,8).map(s => `
+          <div class="border-bottom p-2 d-flex justify-content-between align-items-center">
+            <div><div class="small fw-semibold">${s.receipt_no}</div>
+            <div class="text-muted" style="font-size:0.75rem">${s.created_at?.toDate?.().toLocaleString('th-TH',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) || '-'}</div></div>
+            <div class="fw-bold" style="color:#7c3aed">฿${(s.total||0).toLocaleString()}</div>
+          </div>`).join('')
+        : '<div class="text-center py-4 text-muted">ยังไม่มีรายการ</div>';
+
+      // กราฟเปรียบเทียบ
       const ctx = document.getElementById('sales-chart').getContext('2d');
       if (salesChart) salesChart.destroy();
-      salesChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-          labels: Array.from({length:24}, (_,i) => `${i}:00`),
-          datasets: [{ label: 'ยอดขาย (฿)', data: hourlyData,
-            backgroundColor: 'rgba(124,58,237,0.7)', borderColor: '#7c3aed',
-            borderWidth: 1, borderRadius: 4 }]
-        },
-        options: { responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { y: { ticks: { callback: v => `฿${v.toLocaleString()}` } } } }
-      });
+      const fmtShort = d => new Date(d).toLocaleDateString('th-TH',{month:'short',day:'numeric'});
+      const prevRangeLabel = isSingleDay ? fmtShort(prevEnd) : `${fmtShort(prevStart)} – ${fmtShort(prevEnd)}`;
+
+      if (isSingleDay) {
+        salesChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: Array.from({length:24}, (_,i) => `${i}:00`),
+            datasets: [
+              { label: rangeLabel, data: hourlyData,
+                backgroundColor: 'rgba(124,58,237,0.75)', borderColor: '#7c3aed', borderWidth:1, borderRadius:4, order:2 },
+              { label: prevRangeLabel, data: prevHourlyData, type:'line',
+                borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,0.08)',
+                pointRadius:2, tension:0.3, fill:true, order:1 }
+            ]
+          },
+          options: { responsive:true, maintainAspectRatio:false,
+            plugins: { legend: { display:true, position:'top', labels:{ boxWidth:12, font:{size:11} } } },
+            scales: { y: { ticks: { callback: v => `฿${v.toLocaleString()}` } } } }
+        });
+      } else {
+        const dates = [];
+        const cur = new Date(start);
+        while (cur <= end) { dates.push(cur.toISOString().slice(0,10)); cur.setDate(cur.getDate()+1); }
+        const prevDates = [];
+        const pc = new Date(prevStart);
+        while (pc <= prevEnd) { prevDates.push(pc.toISOString().slice(0,10)); pc.setDate(pc.getDate()+1); }
+        salesChart = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: dates.map(d => fmtShort(d)),
+            datasets: [
+              { label: rangeLabel, data: dates.map(d => dailyData[d]||0),
+                backgroundColor:'rgba(124,58,237,0.75)', borderColor:'#7c3aed', borderWidth:1, borderRadius:4, order:2 },
+              { label: prevRangeLabel, data: prevDates.map(d => prevDailyData[d]||0), type:'line',
+                borderColor:'#f59e0b', backgroundColor:'rgba(245,158,11,0.08)',
+                pointRadius:3, tension:0.3, fill:true, order:1 }
+            ]
+          },
+          options: { responsive:true, maintainAspectRatio:false,
+            plugins: { legend: { display:true, position:'top', labels:{ boxWidth:12, font:{size:11} } } },
+            scales: { y: { ticks: { callback: v => `฿${v.toLocaleString()}` } } } }
+        });
+      }
+    }
+
+    function showLowStockModal() {
+      const lowThreshold = settings.low_stock_threshold || 5;
+      const lowItems = Object.entries(inventory)
+        .filter(([c,q]) => q >= 0 && q <= lowThreshold)
+        .sort((a,b) => a[1] - b[1]);
+      const rows = lowItems.map(([code,qty]) => {
+        const p = prodMap[code] || {};
+        const cls = qty <= 0 ? 'table-danger' : qty <= 2 ? 'table-warning' : '';
+        const txtCls = qty <= 2 ? 'text-danger' : 'text-warning';
+        return `<tr class="${cls}">
+          <td><code style="font-size:0.82rem">${code}</code></td>
+          <td>${p.name || '-'}</td>
+          <td class="text-center fw-bold ${txtCls}">${qty} ชิ้น</td>
+        </tr>`;
+      }).join('');
+      const note = document.getElementById('low-stock-modal-note');
+      if (note) note.textContent = `พบ ${lowItems.length} รายการ (เกณฑ์แจ้งเตือน ≤ ${lowThreshold} ชิ้น)`;
+      document.getElementById('low-stock-modal-body').innerHTML = lowItems.length
+        ? `<div class="table-responsive"><table class="table table-sm mb-0">
+            <thead class="table-light"><tr><th>SKU</th><th>ชื่อสินค้า</th><th class="text-center">คงเหลือ</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table></div>`
+        : '<div class="text-center py-4 text-success"><i class="bi bi-check-circle-fill me-2"></i>สต็อกปกติทุกรายการ</div>';
+      new bootstrap.Modal(document.getElementById('lowStockModal')).show();
     }
 
     // ── Users ──────────────────────────────────────────────
