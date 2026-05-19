@@ -1060,10 +1060,11 @@
       await loadBranches();
       renderBranchSelector();
       tbody.innerHTML = allBranches.map(b => `
-        <tr>
+        <tr id="branch-row-${b.id}">
           <td><code>${b.id}</code></td>
-          <td class="fw-semibold">${b.name}</td>
-          <td>
+          <td id="branch-name-cell-${b.id}" class="fw-semibold">${b.name}</td>
+          <td style="white-space:nowrap">
+            <button class="btn btn-sm btn-outline-primary me-1" onclick="startEditBranch('${b.id}','${b.name.replace(/'/g,"\\'")}')"><i class="bi bi-pencil"></i></button>
             ${b.id === 'main' ? '<span class="badge bg-secondary">ค่าเริ่มต้น</span>' : `<button class="btn btn-sm btn-outline-danger" onclick="deleteBranch('${b.id}','${b.name.replace(/'/g,"\\'")}')"><i class="bi bi-trash"></i></button>`}
           </td>
         </tr>`).join('') || '<tr><td colspan="3" class="text-center py-3 text-muted">ไม่มีสาขา</td></tr>';
@@ -1085,6 +1086,28 @@
       if (!confirm(`ลบสาขา "${name}"?\n\n⚠️ ข้อมูล inventory และยอดขายของสาขานี้จะยังอยู่ในระบบ`)) return;
       await db.collection('branches').doc(id).delete();
       toast(`ลบสาขา "${name}" เรียบร้อย`, 'success');
+      loadBranchesPage();
+    }
+
+    function startEditBranch(id, currentName) {
+      const cell = document.getElementById(`branch-name-cell-${id}`);
+      if (!cell) return;
+      cell.innerHTML = `
+        <div class="input-group input-group-sm" style="max-width:260px">
+          <input type="text" class="form-control" id="edit-branch-input-${id}" value="${currentName.replace(/"/g,'&quot;')}" maxlength="50"
+            onkeydown="if(event.key==='Enter')saveEditBranch('${id}');if(event.key==='Escape')loadBranchesPage()">
+          <button class="btn btn-success" onclick="saveEditBranch('${id}')"><i class="bi bi-check-lg"></i></button>
+          <button class="btn btn-outline-secondary" onclick="loadBranchesPage()"><i class="bi bi-x-lg"></i></button>
+        </div>`;
+      document.getElementById(`edit-branch-input-${id}`)?.focus();
+    }
+
+    async function saveEditBranch(id) {
+      const input = document.getElementById(`edit-branch-input-${id}`);
+      const newName = input?.value.trim();
+      if (!newName) { toast('กรุณาใส่ชื่อสาขา', 'warning'); return; }
+      await db.collection('branches').doc(id).update({ name: newName });
+      toast(`แก้ไขชื่อสาขาเป็น "${newName}" เรียบร้อย`, 'success');
       loadBranchesPage();
     }
 
