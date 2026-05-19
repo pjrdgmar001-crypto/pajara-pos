@@ -696,6 +696,8 @@
     const FieldValue = firebase.firestore.FieldValue;
 
     let currentUser = null, userRole = 'staff';
+    let currentBranch = sessionStorage.getItem('selectedBranch') || 'main';
+    let currentBranchName = sessionStorage.getItem('selectedBranchName') || 'สาขาหลัก';
     let cart = [];
     let allProducts = [], prodByKey = {};
     let inventory = {};
@@ -738,13 +740,13 @@
     async function loadSettings() {
       const d = await db.collection('settings').doc('main').get();
       settings = d.exists ? d.data() : {};
-      document.getElementById('branch-name').textContent = settings.branch_name || '';
+      document.getElementById('branch-name').textContent = currentBranchName;
     }
 
     async function loadProducts() {
       const [pSnap, iSnap] = await Promise.all([
         db.collection('products').get(),
-        db.collection('inventory').where('branch', '==', 'main').get()
+        db.collection('inventory').where('branch', '==', currentBranch).get()
       ]);
 
       inventory = {};
@@ -1145,7 +1147,7 @@
         const rno = `R${now.toISOString().slice(0,10).replace(/-/g,'')}${Date.now().toString().slice(-5)}`;
 
         const sale = {
-          receipt_no: rno, branch: 'main',
+          receipt_no: rno, branch: currentBranch,
           items: cart.map(i => ({ product_code: i.code, product_name: i.name, quantity: i.qty, unit_price: i.price, total: i.price * i.qty, item_discount: getItemDiscAmt(i), item_disc_type: i.itemDiscType, item_disc_val: i.itemDiscVal || 0 })),
           subtotal: sub, discount: disc, total,
           discount_breakdown: { item: getItemDiscTotal(), staff: getStaffDisc(sub), member: memberDiscAmt, points: pointsDiscAmt },
@@ -1172,7 +1174,7 @@
         // Decrement inventory
         const batch = db.batch();
         for (const item of cart) {
-          const snap = await db.collection('inventory').where('product_code','==',item.code).where('branch','==','main').get();
+          const snap = await db.collection('inventory').where('product_code','==',item.code).where('branch','==',currentBranch).get();
           if (!snap.empty) batch.update(snap.docs[0].ref, { quantity: FieldValue.increment(-item.qty) });
         }
         await batch.commit();
@@ -1191,7 +1193,7 @@
     function showReceipt(sale, now) {
       const d = now || new Date();
       const storeName = settings.store_name || 'PAJARA PAJAMAS';
-      const branchName = settings.branch_name || 'สาขาหลัก';
+      const branchName = currentBranchName;
 
       const rows = sale.items.map(i => {
         const iDisc = Number(i.item_discount || 0);
@@ -1274,7 +1276,7 @@
         let rev = 0, disc = 0, cnt = 0, rows = [];
         summaryData = [];
         const salesArr = [];
-        snap.forEach(d => { const s = { id: d.id, ...d.data() }; if (s.branch === 'main') salesArr.push(s); });
+        snap.forEach(d => { const s = { id: d.id, ...d.data() }; if (s.branch === currentBranch) salesArr.push(s); });
         salesArr.sort((a, b) => (b.created_at?.seconds||0) - (a.created_at?.seconds||0));
         salesArr.forEach((s, idx) => {
           summaryData.push(s);
@@ -1691,7 +1693,7 @@
         }
         const batch = db.batch();
         await Promise.all(Object.entries(adjMap).filter(([,v])=>v!==0).map(async ([code,delta]) => {
-          const snap = await db.collection('inventory').where('product_code','==',code).where('branch','==','main').get();
+          const snap = await db.collection('inventory').where('product_code','==',code).where('branch','==',currentBranch).get();
           if (!snap.empty) batch.update(snap.docs[0].ref, { quantity: FieldValue.increment(delta) });
         }));
         await batch.commit();

@@ -55,7 +55,8 @@
   </style>
 </head>
 <body>
-  <div class="login-card">
+  <!-- หน้า Login -->
+  <div class="login-card" id="login-card">
     <div class="logo-area">
       <div class="logo-icon">🛍️</div>
       <div class="logo-text">Pajara POS</div>
@@ -89,7 +90,23 @@
     </form>
 
     <div class="version-badge">
-      <span>Pajara POS v1.0 · 2025</span>
+      <span>Pajara POS v1.1 · 2025</span>
+    </div>
+  </div>
+
+  <!-- หน้าเลือกสาขา (แสดงหลัง login สำหรับ staff ที่มีหลายสาขา) -->
+  <div class="login-card d-none" id="branch-card" style="width:480px;max-width:95vw">
+    <div class="logo-area">
+      <div class="logo-icon">🏪</div>
+      <div class="logo-text" id="branch-user-name">เลือกสาขา</div>
+      <div class="logo-sub" id="branch-user-email"></div>
+    </div>
+    <p class="text-center text-muted mb-3" style="font-size:0.9rem">เลือกสาขาที่ต้องการเข้าใช้งาน</p>
+    <div id="branch-list" class="row g-2"></div>
+    <div class="version-badge mt-3">
+      <button class="btn btn-sm btn-link text-muted" onclick="doLogoutFromBranch()">
+        <i class="bi bi-box-arrow-left me-1"></i>ออกจากระบบ
+      </button>
     </div>
   </div>
 
@@ -114,6 +131,75 @@
       }
     });
 
+    async function handleUserAfterLogin(user) {
+      const userDoc = await db.collection('users').doc(user.uid).get();
+      const userData = userDoc.exists ? userDoc.data() : {};
+      const role = userData.role || 'staff';
+
+      if (role === 'admin') {
+        sessionStorage.setItem('selectedBranch', '__all__');
+        sessionStorage.setItem('selectedBranchName', 'ทั้งหมด');
+        window.location.href = 'admin.html';
+        return;
+      }
+
+      // staff: ตรวจสอบสาขาที่เข้าถึงได้
+      const allowedBranches = userData.branches || [];
+      if (allowedBranches.length === 0) {
+        // ไม่มีสาขาที่กำหนด → เข้า pos ได้แบบไม่มีสาขาเฉพาะ (backward compat)
+        sessionStorage.setItem('selectedBranch', 'main');
+        sessionStorage.setItem('selectedBranchName', 'สาขาหลัก');
+        window.location.href = 'pos.html';
+        return;
+      }
+
+      if (allowedBranches.length === 1) {
+        // สาขาเดียว → เข้าตรง
+        const branchSnap = await db.collection('branches').doc(allowedBranches[0]).get();
+        const branchName = branchSnap.exists ? branchSnap.data().name : allowedBranches[0];
+        sessionStorage.setItem('selectedBranch', allowedBranches[0]);
+        sessionStorage.setItem('selectedBranchName', branchName);
+        window.location.href = 'pos.html';
+        return;
+      }
+
+      // หลายสาขา → แสดงหน้าเลือกสาขา
+      const branchSnaps = await Promise.all(allowedBranches.map(id => db.collection('branches').doc(id).get()));
+      const branches = branchSnaps.map((snap, i) => ({
+        id: allowedBranches[i],
+        name: snap.exists ? snap.data().name : allowedBranches[i]
+      }));
+
+      document.getElementById('login-card').classList.add('d-none');
+      document.getElementById('branch-card').classList.remove('d-none');
+      document.getElementById('branch-user-name').textContent = userData.name || user.email;
+      document.getElementById('branch-user-email').textContent = user.email;
+
+      document.getElementById('branch-list').innerHTML = branches.map(b => `
+        <div class="col-6">
+          <button class="btn w-100 py-3" style="border:2px solid #e5e7eb;border-radius:14px;font-family:inherit;font-size:0.95rem;font-weight:600;background:white;transition:all 0.15s"
+            onmouseover="this.style.borderColor='#7c3aed';this.style.background='#f5f3ff'"
+            onmouseout="this.style.borderColor='#e5e7eb';this.style.background='white'"
+            onclick="selectBranch('${b.id}','${b.name.replace(/'/g,"\\'")}')">
+            <i class="bi bi-shop-window d-block mb-1" style="font-size:1.5rem;color:#7c3aed"></i>
+            ${b.name}
+          </button>
+        </div>`).join('');
+    }
+
+    function selectBranch(id, name) {
+      sessionStorage.setItem('selectedBranch', id);
+      sessionStorage.setItem('selectedBranchName', name);
+      window.location.href = 'pos.html';
+    }
+
+    function doLogoutFromBranch() {
+      auth.signOut().then(() => {
+        document.getElementById('branch-card').classList.add('d-none');
+        document.getElementById('login-card').classList.remove('d-none');
+      });
+    }
+
     // Login form
     document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -129,9 +215,7 @@
 
       try {
         const cred = await auth.signInWithEmailAndPassword(email, password);
-        const userDoc = await db.collection('users').doc(cred.user.uid).get();
-        const role = userDoc.exists ? userDoc.data().role : 'staff';
-        window.location.href = role === 'admin' ? 'admin.html' : 'pos.html';
+        await handleUserAfterLogin(cred.user);
       } catch (err) {
         alertBox.className = 'alert alert-danger';
         const msgs = {
@@ -151,9 +235,7 @@
     auth.onAuthStateChanged(async (user) => {
       if (user) {
         try {
-          const userDoc = await db.collection('users').doc(user.uid).get();
-          const role = userDoc.exists ? userDoc.data().role : 'staff';
-          window.location.href = role === 'admin' ? 'admin.html' : 'pos.html';
+          await handleUserAfterLogin(user);
         } catch (_) {}
       }
     });
