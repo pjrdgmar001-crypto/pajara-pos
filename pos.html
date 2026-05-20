@@ -1197,6 +1197,12 @@
         const now = new Date();
         const rno = `R${now.toISOString().slice(0,10).replace(/-/g,'')}${Date.now().toString().slice(-5)}`;
 
+        // คำนวณแต้มก่อน save เพื่อแสดงในใบเสร็จ
+        const earnPts = currentMember ? Math.floor(total / 100) * 10 : 0;
+        const usedPts = currentMember ? (currentMember.usePoints || 0) : 0;
+        const ptsBefore = currentMember ? (currentMember.points || 0) : 0;
+        const ptsAfter = ptsBefore + earnPts - usedPts;
+
         const sale = {
           receipt_no: rno, branch: currentBranch,
           items: cart.map(i => ({ product_code: i.code, product_name: i.name, quantity: i.qty, unit_price: i.price, total: i.price * i.qty, item_discount: getItemDiscAmt(i), item_disc_type: i.itemDiscType, item_disc_val: i.itemDiscVal || 0 })),
@@ -1206,14 +1212,16 @@
           created_at: FieldValue.serverTimestamp(),
           cashier: currentUser.email,
           member_phone: currentMember?.phone || null,
-          member_name: currentMember?.name || null
+          member_name: currentMember?.name || null,
+          earn_points: earnPts,
+          used_points: usedPts,
+          points_before: ptsBefore,
+          points_after: ptsAfter
         };
         await db.collection('sales').add(sale);
 
-        // อัปเดตแต้มสมาชิก: ซื้อครบ 100 บาท (ยอดสุทธิ) = 10 แต้ม, ใช้ 100 แต้ม = ลด 10 บาท
+        // อัปเดตแต้มสมาชิก: ซื้อครบ 100 บาท (ยอดสุทธิ) = 10 แต้ม
         if (currentMember) {
-          const earnPts = Math.floor(total / 100) * 10;
-          const usedPts = currentMember.usePoints || 0;
           await db.collection('members').doc(currentMember.phone).update({
             points: FieldValue.increment(earnPts - usedPts),
             total_spent: FieldValue.increment(total),
@@ -1277,6 +1285,30 @@
 
       const memberLine = sale.member_name ? `<tr><td style="font-size:10px;color:#888">สมาชิก</td><td style="text-align:right;font-size:10px;color:#888">${sale.member_name}</td></tr>` : '';
 
+      // กล่องแต้มสะสม (แสดงเฉพาะเมื่อมีสมาชิก)
+      let pointsSection = '';
+      if (sale.member_phone) {
+        const ep = Number(sale.earn_points || 0);
+        const up = Number(sale.used_points || 0);
+        const pb = Number(sale.points_before || 0);
+        const pa = Number(sale.points_after ?? (pb + ep - up));
+        const nextDisc = Math.floor(pa / 10); // ทุก 10 แต้ม = ฿1
+        let ptRows = '';
+        if (up > 0) ptRows += `<tr><td style="font-size:10px;color:#f87171">└ ใช้แต้ม</td><td style="text-align:right;font-size:10px;color:#f87171">-${up} แต้ม</td></tr>`;
+        if (ep > 0) ptRows += `<tr><td style="font-size:10px;color:#22c55e">└ แต้มที่ได้รับ</td><td style="text-align:right;font-size:10px;color:#22c55e">+${ep} แต้ม</td></tr>`;
+        pointsSection = `
+          <hr style="border-style:dashed;margin:8px 0">
+          <table style="width:100%">
+            <tr><td style="font-size:11px;font-weight:700">⭐ แต้มสะสม (${sale.member_name})</td></tr>
+            ${ptRows}
+            <tr style="border-top:1px dashed #ccc">
+              <td style="font-size:11px;font-weight:700;padding-top:4px">แต้มคงเหลือ</td>
+              <td style="text-align:right;font-size:11px;font-weight:700;padding-top:4px">${pa.toLocaleString()} แต้ม</td>
+            </tr>
+            ${nextDisc > 0 ? `<tr><td colspan="2" style="font-size:10px;color:#888;text-align:center;padding-top:2px">(ใช้ได้ = ฿${nextDisc.toLocaleString()})</td></tr>` : ''}
+          </table>`;
+      }
+
       const html = `
         <div style="font-family:'Courier New',monospace;max-width:320px;margin:0 auto">
           <div style="text-align:center;margin-bottom:12px">
@@ -1295,6 +1327,7 @@
             <tr><td style="font-size:11px;color:#666">ชำระโดย</td><td style="font-size:11px;color:#666;text-align:right">${sale.payment_method === 'cash' ? 'เงินสด' : 'โอน/QR'}</td></tr>
             ${memberLine}
           </table>
+          ${pointsSection}
           <div style="text-align:center;margin-top:12px;font-size:11px;color:#888">
             ${settings.receipt_footer || 'ขอบคุณที่ใช้บริการ'}
           </div>
