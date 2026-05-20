@@ -340,7 +340,7 @@
 
         <!-- ส่วนลดสมาชิก (แสดงเมื่อมีสมาชิก) -->
         <div id="member-disc-row" style="display:none;justify-content:space-between;align-items:center;margin-bottom:4px;padding:4px 0;border-top:1px solid #1e293b">
-          <span style="font-size:0.8rem;color:#a5b4fc"><i class="bi bi-person-check me-1"></i>ส่วนลดสมาชิก (<span id="mb-disc-pct">0</span>%)</span>
+          <span style="font-size:0.8rem;color:#a5b4fc"><i class="bi bi-person-check me-1"></i>ส่วนลดสมาชิก (฿50)</span>
           <span style="font-size:0.82rem;color:#a5b4fc" id="member-disc-display">-฿0</span>
         </div>
 
@@ -366,7 +366,7 @@
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
               <div style="font-size:0.82rem;color:#a5b4fc"><i class="bi bi-person-check me-1"></i><span id="mb-name"></span></div>
-              <div style="font-size:0.72rem;color:#64748b">แต้ม: <span id="mb-points"></span> | ส่วนลด: <span id="mb-disc"></span>%</div>
+              <div style="font-size:0.72rem;color:#64748b">แต้ม: <span id="mb-points"></span> | ส่วนลดสมาชิก: ฿50</div>
             </div>
             <button onclick="clearMember()" style="background:none;border:none;color:#f87171;font-size:1rem">×</button>
           </div>
@@ -711,6 +711,7 @@
     let discType = 'baht';
     let memberDiscAmt = 0;
     let pointsDiscAmt = 0;
+    let skuPromoMap = {}; // product_code → { title, discount_type, discount_value }
 
     function toggleDiscType() {
       discType = discType === 'baht' ? 'pct' : 'baht';
@@ -744,13 +745,24 @@
     }
 
     async function loadProducts() {
-      const [pSnap, iSnap] = await Promise.all([
+      const [pSnap, iSnap, promoSnap] = await Promise.all([
         db.collection('products').get(),
-        db.collection('inventory').where('branch', '==', currentBranch).get()
+        db.collection('inventory').where('branch', '==', currentBranch).get(),
+        db.collection('promotions').where('is_active','==',true).get()
       ]);
 
       inventory = {};
       iSnap.forEach(d => { inventory[d.data().product_code] = d.data().quantity || 0; });
+
+      skuPromoMap = {};
+      promoSnap.forEach(d => {
+        const pr = d.data();
+        if (pr.type === 'sku_discount') {
+          (pr.sku_codes || []).forEach(code => {
+            skuPromoMap[code.toLowerCase()] = { title: pr.title, discount_type: pr.discount_type, discount_value: pr.discount_value };
+          });
+        }
+      });
 
       allProducts = [];
       prodByKey = {};
@@ -838,12 +850,22 @@
           ? `<img src="${p.image_url}" class="p-img" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
           : '';
         const ph = `<div class="p-placeholder" style="${p.image_url ? 'display:none' : ''}">🛍️</div>`;
-        return `<div class="p-card ${oos ? 'no-stock' : ''}" onclick="addItem('${safeCode}')" title="${(p.name||'').replace(/"/g,'&quot;')}">
-          ${img}${ph}
+        const promo = skuPromoMap[(p.code||'').toLowerCase()] || skuPromoMap[(p.barcode||'').toLowerCase()];
+        const promoBadge = promo
+          ? `<div style="position:absolute;top:4px;left:4px;background:#dc2626;color:white;font-size:0.6rem;font-weight:700;padding:2px 6px;border-radius:4px;z-index:2">🔥 โปร</div>`
+          : '';
+        const promoPrice = promo ? (() => {
+          const base = Number(p.selling_price || 0);
+          const disc = promo.discount_type === 'percent' ? Math.floor(base * promo.discount_value / 100) : promo.discount_value;
+          const final = Math.max(0, base - disc);
+          return `<div style="font-size:0.7rem;color:#f87171;text-decoration:line-through">฿${base.toLocaleString()}</div><div class="p-price" style="color:#f87171">฿${final.toLocaleString()}</div>`;
+        })() : `<div class="p-price">฿${Number(p.selling_price || 0).toLocaleString()}</div>`;
+        return `<div class="p-card ${oos ? 'no-stock' : ''}" onclick="addItem('${safeCode}')" title="${(p.name||'').replace(/"/g,'&quot;')}" style="position:relative">
+          ${promoBadge}${img}${ph}
           <div class="stock-badge" style="background:${oos ? '#ef4444' : 'rgba(0,0,0,0.55)'}">${qty}</div>
           <div class="p-body">
             <div class="p-name">${p.name || '-'}</div>
-            <div class="p-price">฿${Number(p.selling_price || 0).toLocaleString()}</div>
+            ${promoPrice}
             <div class="p-stock">${oos ? '⚠️ หมดสต็อก' : `คงเหลือ ${qty} ${p.unit || 'ชิ้น'}`}</div>
           </div>
         </div>`;
@@ -875,7 +897,16 @@
       const curQty = ci ? ci.qty : 0;
       if (curQty >= stock) { toast(`สินค้าเต็มจำนวน (${stock} ชิ้น)`, 'warning'); return; }
       if (ci) ci.qty++;
-      else cart.push({ code: p.code, name: p.name, price: Number(p.selling_price || 0), qty: 1, unit: p.unit || 'ชิ้น', itemDiscType: 'baht', itemDiscVal: 0 });
+      else {
+        const promo = skuPromoMap[(p.code||'').toLowerCase()] || skuPromoMap[(p.barcode||'').toLowerCase()];
+        let itemDiscType = 'baht', itemDiscVal = 0;
+        if (promo) {
+          itemDiscType = promo.discount_type === 'percent' ? 'pct' : 'baht';
+          itemDiscVal = promo.discount_value;
+          toast(`🔥 โปรโมชั่น: ${promo.title}`, 'success', 2000);
+        }
+        cart.push({ code: p.code, name: p.name, price: Number(p.selling_price || 0), qty: 1, unit: p.unit || 'ชิ้น', itemDiscType, itemDiscVal });
+      }
       renderCart();
       toast(`+ ${p.name.substring(0, 30)}${p.name.length > 30 ? '...' : ''}`, 'success', 700);
     }
@@ -1393,22 +1424,22 @@
         const m = { phone, ...doc.data() };
         foundMemberCache = m;  // เก็บใน variable แทน JSON ใน onclick
         const pts = m.points || 0;
-        const maxUsable = Math.floor(pts / 100) * 100;
-        const ptsBaht = Math.floor(pts / 100) * 10;  // 100 แต้ม = 10 บาท
+        const maxUsable = pts;
+        const ptsBaht = Math.floor(pts / 10);  // ทุก 10 แต้ม = ฿1 (proportional)
         res.innerHTML = `
           <div class="alert alert-success mb-3">
             <div class="fw-bold fs-6"><i class="bi bi-person-check me-1"></i>${m.name}</div>
             <div class="small mt-1">📞 ${phone} | ⭐ <strong>${pts}</strong> แต้ม (ใช้ได้ = ฿${ptsBaht})</div>
-            <div class="small">ยอดซื้อรวม: ฿${(m.total_spent||0).toLocaleString()} | ส่วนลดสมาชิก: ${m.discount_percent||5}%</div>
-            <div class="small text-muted mt-1">📌 ทุก 100 แต้ม = ส่วนลด 10 บาท</div>
+            <div class="small">ยอดซื้อรวม: ฿${(m.total_spent||0).toLocaleString()} | ส่วนลดสมาชิก: ฿50</div>
+            <div class="small text-muted mt-1">📌 ทุก 10 แต้ม = ส่วนลด 1 บาท (คำนวณตามสัดส่วน)</div>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold small">ต้องการใช้แต้ม (100 แต้ม = ฿10)</label>
+            <label class="form-label fw-semibold small">ต้องการใช้แต้ม (10 แต้ม = ฿1)</label>
             <div class="input-group">
-              <input type="number" class="form-control" id="use-pts-input" min="0" max="${maxUsable}" step="100" value="0" placeholder="0">
+              <input type="number" class="form-control" id="use-pts-input" min="0" max="${maxUsable}" step="1" value="0" placeholder="0">
               <span class="input-group-text">แต้ม = ฿<span id="pts-baht-preview">0</span></span>
             </div>
-            <div class="form-text">มีแต้ม ${pts} แต้ม | ใช้ได้ครั้งนี้สูงสุด ${maxUsable} แต้ม = ฿${ptsBaht}</div>
+            <div class="form-text">มีแต้ม ${pts} แต้ม | ใช้ได้สูงสุด ${maxUsable} แต้ม = ฿${ptsBaht}</div>
           </div>
           <button class="btn btn-primary w-100" onclick="applyMemberFromCache()">
             <i class="bi bi-check-circle me-1"></i>ใช้สิทธิ์สมาชิก
@@ -1416,8 +1447,8 @@
         document.getElementById('mb-new-form').classList.add('d-none');
         // Live preview แต้ม
         document.getElementById('use-pts-input').addEventListener('input', function() {
-          const v = Math.floor(Math.min(Math.max(0, Number(this.value)||0), maxUsable) / 100) * 100;
-          document.getElementById('pts-baht-preview').textContent = Math.floor(v / 100) * 10;
+          const v = Math.min(Math.max(0, Number(this.value)||0), maxUsable);
+          document.getElementById('pts-baht-preview').textContent = Math.floor(v / 10);
         });
       } else {
         foundMemberCache = null;
@@ -1430,7 +1461,7 @@
 
     function applyMemberFromCache() {
       if (!foundMemberCache) return;
-      const usePts = Math.max(0, Number(document.getElementById('use-pts-input')?.value||0));
+      const usePts = Math.min(Math.max(0, Number(document.getElementById('use-pts-input')?.value||0)), foundMemberCache.points||0);
       applyMember(foundMemberCache, usePts);
     }
 
@@ -1438,19 +1469,16 @@
       currentMember = { ...m, usePoints };
       document.getElementById('mb-name').textContent = m.name;
       document.getElementById('mb-points').textContent = m.points || 0;
-      document.getElementById('mb-disc').textContent = m.discount_percent || 5;
-      document.getElementById('mb-disc-pct').textContent = m.discount_percent || 5;
       document.getElementById('member-bar').style.display = '';
 
-      // แยก member % discount และ points discount
-      const sub = cart.reduce((s,i) => s + i.price*i.qty, 0);
-      memberDiscAmt = Math.floor(sub * (m.discount_percent||5) / 100);
-      pointsDiscAmt = Math.floor(usePoints / 100) * 10;
+      // ส่วนลดสมาชิก ฿50 คงที่ + แต้มสะสม (ทุก 10 แต้ม = ฿1)
+      memberDiscAmt = 50;
+      pointsDiscAmt = Math.floor(usePoints / 10);
 
       updateTotals();
       bootstrap.Modal.getInstance(document.getElementById('memberModal'))?.hide();
 
-      let msg = `สมาชิก ${m.name} | ส่วนลด ${m.discount_percent||5}% = ฿${memberDiscAmt}`;
+      let msg = `สมาชิก ${m.name} | ส่วนลด ฿50`;
       if (pointsDiscAmt > 0) msg += ` | แต้ม ฿${pointsDiscAmt}`;
       toast(msg, 'success', 4000);
     }
@@ -1462,7 +1490,7 @@
       const m = {
         phone, name,
         email: document.getElementById('mb-new-email').value.trim(),
-        points: 0, total_spent: 0, discount_percent: 5,
+        points: 0, total_spent: 0,
         join_date: FieldValue.serverTimestamp(),
         last_purchase: null
       };
@@ -1517,7 +1545,7 @@
         promoList = [];
         snap.forEach(d => {
           const p = { id: d.id, ...d.data() };
-          if (!shown.includes(p.id)) promoList.push(p);
+          if (!shown.includes(p.id) && p.type !== 'sku_discount') promoList.push(p);
         });
         if (!promoList.length) return;
         promoIndex = 0;

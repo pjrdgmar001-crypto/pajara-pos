@@ -485,7 +485,7 @@
       <div class="page-header d-flex justify-content-between align-items-start">
         <div>
           <h2><i class="bi bi-megaphone me-2"></i>โปรโมชั่น</h2>
-          <p>สร้างประกาศโปรโมชั่นที่จะแสดงเป็นป๊อปอัพในหน้าร้าน</p>
+          <p>สร้างประกาศโปรโมชั่น หรือกำหนดส่วนลดรายสินค้า (SKU) ที่ใช้งานอัตโนมัติเมื่อสแกนบาร์โค้ด</p>
         </div>
         <button class="btn btn-primary btn-sm" onclick="openAddPromoModal()">
           <i class="bi bi-plus-circle me-1"></i>เพิ่มโปรโมชั่น
@@ -833,28 +833,72 @@
           <button class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <div class="row g-3">
-            <div class="col-md-5">
-              <label class="form-label fw-semibold">รูปภาพโปรโมชั่น</label>
-              <div id="promo-img-preview" style="width:100%;height:180px;background:#ede9fe;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:3rem;overflow:hidden">🎉</div>
-              <input type="file" id="promo-img-file" accept="image/*" class="d-none" onchange="previewPromoImg(this)">
-              <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="document.getElementById('promo-img-file').click()">
-                <i class="bi bi-image me-1"></i>เลือกรูปภาพ
-              </button>
-              <div id="promo-img-status" class="small text-muted mt-1 text-center"></div>
+          <!-- Type selector -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">ประเภทโปรโมชั่น</label>
+            <div class="d-flex gap-2">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="promo-type" id="pf-type-announce" value="announcement" checked onchange="togglePromoTypeFields()">
+                <label class="form-check-label" for="pf-type-announce"><i class="bi bi-megaphone me-1"></i>ประกาศ / แบนเนอร์</label>
+              </div>
+              <div class="form-check ms-3">
+                <input class="form-check-input" type="radio" name="promo-type" id="pf-type-sku" value="sku_discount" onchange="togglePromoTypeFields()">
+                <label class="form-check-label" for="pf-type-sku"><i class="bi bi-tag me-1"></i>ส่วนลดรายสินค้า (SKU)</label>
+              </div>
             </div>
-            <div class="col-md-7">
-              <div class="mb-3">
-                <label class="form-label fw-semibold">ชื่อโปรโมชั่น <span class="text-danger">*</span></label>
-                <input type="text" class="form-control" id="pf-promo-title" placeholder="เช่น ลด 20% ทุกรายการ">
+          </div>
+
+          <!-- Common: Title + Active -->
+          <div class="mb-3">
+            <label class="form-label fw-semibold">ชื่อโปรโมชั่น <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="pf-promo-title" placeholder="เช่น ลดราคาสินค้า A">
+          </div>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" id="pf-promo-active" checked>
+            <label class="form-check-label fw-semibold" for="pf-promo-active">เปิดใช้งาน</label>
+          </div>
+
+          <!-- Announcement fields -->
+          <div id="pf-announce-fields">
+            <div class="row g-3">
+              <div class="col-md-5">
+                <label class="form-label fw-semibold">รูปภาพโปรโมชั่น</label>
+                <div id="promo-img-preview" style="width:100%;height:180px;background:#ede9fe;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:3rem;overflow:hidden">🎉</div>
+                <input type="file" id="promo-img-file" accept="image/*" class="d-none" onchange="previewPromoImg(this)">
+                <button class="btn btn-outline-secondary btn-sm w-100 mt-2" onclick="document.getElementById('promo-img-file').click()">
+                  <i class="bi bi-image me-1"></i>เลือกรูปภาพ
+                </button>
+                <div id="promo-img-status" class="small text-muted mt-1 text-center"></div>
               </div>
-              <div class="mb-3">
+              <div class="col-md-7">
                 <label class="form-label fw-semibold">รายละเอียด</label>
-                <textarea class="form-control" id="pf-promo-desc" rows="4" placeholder="รายละเอียดโปรโมชั่น..."></textarea>
+                <textarea class="form-control" id="pf-promo-desc" rows="6" placeholder="รายละเอียดโปรโมชั่น..."></textarea>
               </div>
-              <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="pf-promo-active" checked>
-                <label class="form-check-label fw-semibold" for="pf-promo-active">เปิดใช้งาน (แสดงในหน้าร้าน)</label>
+            </div>
+          </div>
+
+          <!-- SKU Discount fields -->
+          <div id="pf-sku-fields" style="display:none">
+            <div class="alert alert-info py-2 small"><i class="bi bi-info-circle me-1"></i>เมื่อสแกนบาร์โค้ดสินค้าที่กำหนด ระบบ POS จะใส่ส่วนลดให้อัตโนมัติ และแสดงป้าย 🔥โปร บนหน้าสินค้า</div>
+            <div class="mb-3">
+              <label class="form-label fw-semibold">รหัสสินค้า / SKU <span class="text-danger">*</span></label>
+              <textarea class="form-control" id="pf-sku-codes" rows="4" placeholder="ใส่รหัสสินค้า (SKU) 1 รหัสต่อบรรทัด เช่น&#10;SKU001&#10;SKU002&#10;SKU003"></textarea>
+              <div class="form-text">ใส่รหัสสินค้า (product code) หรือ Barcode 1 รายการต่อบรรทัด</div>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">ประเภทส่วนลด</label>
+                <select class="form-select" id="pf-disc-type" onchange="document.getElementById('pf-disc-unit').textContent=this.value==='percent'?'%':'฿'">
+                  <option value="fixed">จำนวนเงิน (฿)</option>
+                  <option value="percent">เปอร์เซ็นต์ (%)</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-semibold">มูลค่าส่วนลด <span class="text-danger">*</span></label>
+                <div class="input-group">
+                  <input type="number" class="form-control" id="pf-disc-value" min="0" placeholder="0">
+                  <span class="input-group-text" id="pf-disc-unit">฿</span>
+                </div>
               </div>
             </div>
           </div>
@@ -885,8 +929,8 @@
               <input type="email" class="form-control" id="mf-email" placeholder="email@example.com"></div>
             <div class="col-6"><label class="form-label">แต้มสะสม</label>
               <input type="number" class="form-control" id="mf-points" value="0" min="0"></div>
-            <div class="col-6"><label class="form-label">ส่วนลดสมาชิก (%)</label>
-              <input type="number" class="form-control" id="mf-disc" value="5" min="0" max="100"></div>
+            <div class="col-6"><label class="form-label">ส่วนลดสมาชิก</label>
+              <div class="form-control-plaintext fw-semibold text-primary">฿50 (คงที่)</div></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -2412,7 +2456,7 @@
           <td><small>${m.email||'-'}</small></td>
           <td><span class="badge bg-warning text-dark">⭐ ${m.points||0}</span></td>
           <td>฿${(m.total_spent||0).toLocaleString()}</td>
-          <td>${m.discount_percent||5}%</td>
+          <td>฿50</td>
           <td><small>${m.join_date?.toDate?.().toLocaleDateString('th-TH')||'-'}</small></td>
           <td>
             <button class="btn btn-sm btn-outline-primary me-1" onclick='openEditMember(${JSON.stringify(m)})'><i class="bi bi-pencil"></i></button>
@@ -2423,14 +2467,14 @@
 
     function exportMembersExcel() {
       if (!allMembers.length) { toast('ไม่มีข้อมูลสมาชิก', 'warning'); return; }
-      const headers = ['เบอร์โทร','ชื่อ-นามสกุล','อีเมล','แต้มสะสม','ยอดซื้อรวม (฿)','ส่วนลดสมาชิก (%)','วันที่สมัคร','ซื้อล่าสุด'];
+      const headers = ['เบอร์โทร','ชื่อ-นามสกุล','อีเมล','แต้มสะสม','ยอดซื้อรวม (฿)','ส่วนลดสมาชิก (฿)','วันที่สมัคร','ซื้อล่าสุด'];
       const rows = allMembers.map(m => [
         m.phone || m.id,
         m.name || '',
         m.email || '',
         m.points || 0,
         m.total_spent || 0,
-        m.discount_percent || 5,
+        50,
         m.join_date?.toDate?.().toLocaleDateString('th-TH') || '',
         m.last_purchase?.toDate?.().toLocaleDateString('th-TH') || ''
       ]);
@@ -2449,7 +2493,6 @@
       document.getElementById('mf-name').value = '';
       document.getElementById('mf-email').value = '';
       document.getElementById('mf-points').value = 0;
-      document.getElementById('mf-disc').value = 5;
       new bootstrap.Modal(document.getElementById('memberModal')).show();
     }
 
@@ -2460,7 +2503,6 @@
       document.getElementById('mf-name').value = m.name || '';
       document.getElementById('mf-email').value = m.email || '';
       document.getElementById('mf-points').value = m.points || 0;
-      document.getElementById('mf-disc').value = m.discount_percent || 5;
       new bootstrap.Modal(document.getElementById('memberModal')).show();
     }
 
@@ -2472,7 +2514,6 @@
         phone, name,
         email: document.getElementById('mf-email').value.trim(),
         points: Number(document.getElementById('mf-points').value)||0,
-        discount_percent: Number(document.getElementById('mf-disc').value)||5,
         total_spent: 0,
         join_date: FieldValue.serverTimestamp()
       }, { merge: true });
@@ -2492,6 +2533,14 @@
     let editingPromoId = null;
     let promoImgFile = null;
 
+    function togglePromoTypeFields() {
+      const isSku = document.getElementById('pf-type-sku').checked;
+      document.getElementById('pf-announce-fields').style.display = isSku ? 'none' : '';
+      document.getElementById('pf-sku-fields').style.display = isSku ? '' : 'none';
+      const unit = document.getElementById('pf-disc-type')?.value === 'percent' ? '%' : '฿';
+      if (document.getElementById('pf-disc-unit')) document.getElementById('pf-disc-unit').textContent = unit;
+    }
+
     async function loadPromotions() {
       const grid = document.getElementById('promo-grid');
       grid.innerHTML = '<div class="col-12 text-center py-4"><div class="spinner-border text-secondary spinner-border-sm"></div></div>';
@@ -2503,28 +2552,56 @@
       grid.innerHTML = '';
       snap.forEach(d => {
         const p = { id: d.id, ...d.data() };
+        const isSku = p.type === 'sku_discount';
         const col = document.createElement('div');
         col.className = 'col-md-6 col-lg-4';
-        col.innerHTML = `
-          <div class="data-table h-100" style="border-radius:14px;overflow:hidden">
-            <div style="height:180px;overflow:hidden;background:#ede9fe;display:flex;align-items:center;justify-content:center;font-size:3rem">
-              ${p.image_url ? `<img src="${p.image_url}" style="width:100%;height:180px;object-fit:cover" onerror="this.style.display='none'">` : '🎉'}
-            </div>
-            <div style="padding:14px">
-              <div class="d-flex justify-content-between align-items-start mb-1">
-                <h6 class="fw-bold mb-0">${p.title||'ไม่มีชื่อ'}</h6>
-                <span class="badge ${p.is_active ? 'bg-success' : 'bg-secondary'}">${p.is_active ? 'เปิด' : 'ปิด'}</span>
+        if (isSku) {
+          const discLabel = p.discount_type === 'percent' ? `${p.discount_value}%` : `฿${p.discount_value}`;
+          const skuList = (p.sku_codes||[]).slice(0,5).join(', ') + ((p.sku_codes||[]).length > 5 ? ` ...+${p.sku_codes.length-5}` : '');
+          col.innerHTML = `
+            <div class="data-table h-100" style="border-radius:14px;overflow:hidden">
+              <div style="height:80px;background:linear-gradient(135deg,#dc2626,#b91c1c);display:flex;align-items:center;justify-content:center;gap:10px">
+                <i class="bi bi-tag-fill text-white" style="font-size:2rem"></i>
+                <div style="color:white;text-align:center"><div style="font-size:1.5rem;font-weight:800">-${discLabel}</div><div style="font-size:0.75rem;opacity:0.85">ส่วนลดรายสินค้า</div></div>
               </div>
-              <p class="text-muted small mb-3" style="white-space:pre-line">${(p.description||'').substring(0,120)}</p>
-              <div class="d-flex gap-2">
-                <button class="btn btn-sm btn-outline-primary flex-fill" onclick='openEditPromoModal(${JSON.stringify(p)})'><i class="bi bi-pencil me-1"></i>แก้ไข</button>
-                <button class="btn btn-sm ${p.is_active ? 'btn-outline-warning' : 'btn-outline-success'}" onclick="togglePromo('${p.id}',${p.is_active})">
-                  ${p.is_active ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>'}
-                </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deletePromo('${p.id}')"><i class="bi bi-trash"></i></button>
+              <div style="padding:14px">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                  <h6 class="fw-bold mb-0">${p.title||'ไม่มีชื่อ'}</h6>
+                  <span class="badge ${p.is_active ? 'bg-danger' : 'bg-secondary'}">${p.is_active ? 'เปิด' : 'ปิด'}</span>
+                </div>
+                <div class="small text-muted mb-1"><i class="bi bi-upc-scan me-1"></i>SKU: ${skuList || '-'}</div>
+                <div class="small text-muted mb-3">รายการสินค้า: ${(p.sku_codes||[]).length} รหัส</div>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-outline-primary flex-fill" onclick='openEditPromoModal(${JSON.stringify(p)})'><i class="bi bi-pencil me-1"></i>แก้ไข</button>
+                  <button class="btn btn-sm ${p.is_active ? 'btn-outline-warning' : 'btn-outline-success'}" onclick="togglePromo('${p.id}',${p.is_active})">
+                    ${p.is_active ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>'}
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger" onclick="deletePromo('${p.id}')"><i class="bi bi-trash"></i></button>
+                </div>
               </div>
-            </div>
-          </div>`;
+            </div>`;
+        } else {
+          col.innerHTML = `
+            <div class="data-table h-100" style="border-radius:14px;overflow:hidden">
+              <div style="height:180px;overflow:hidden;background:#ede9fe;display:flex;align-items:center;justify-content:center;font-size:3rem">
+                ${p.image_url ? `<img src="${p.image_url}" style="width:100%;height:180px;object-fit:cover" onerror="this.style.display='none'">` : '🎉'}
+              </div>
+              <div style="padding:14px">
+                <div class="d-flex justify-content-between align-items-start mb-1">
+                  <h6 class="fw-bold mb-0">${p.title||'ไม่มีชื่อ'}</h6>
+                  <span class="badge ${p.is_active ? 'bg-success' : 'bg-secondary'}">${p.is_active ? 'เปิด' : 'ปิด'}</span>
+                </div>
+                <p class="text-muted small mb-3" style="white-space:pre-line">${(p.description||'').substring(0,120)}</p>
+                <div class="d-flex gap-2">
+                  <button class="btn btn-sm btn-outline-primary flex-fill" onclick='openEditPromoModal(${JSON.stringify(p)})'><i class="bi bi-pencil me-1"></i>แก้ไข</button>
+                  <button class="btn btn-sm ${p.is_active ? 'btn-outline-warning' : 'btn-outline-success'}" onclick="togglePromo('${p.id}',${p.is_active})">
+                    ${p.is_active ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>'}
+                  </button>
+                  <button class="btn btn-sm btn-outline-danger" onclick="deletePromo('${p.id}')"><i class="bi bi-trash"></i></button>
+                </div>
+              </div>
+            </div>`;
+        }
         grid.appendChild(col);
       });
     }
@@ -2532,30 +2609,41 @@
     function openAddPromoModal() {
       editingPromoId = null; promoImgFile = null;
       document.getElementById('promo-modal-edit-title').innerHTML = '<i class="bi bi-megaphone me-2"></i>เพิ่มโปรโมชั่น';
+      document.getElementById('pf-type-announce').checked = true;
       document.getElementById('pf-promo-title').value = '';
       document.getElementById('pf-promo-desc').value = '';
       document.getElementById('pf-promo-active').checked = true;
       document.getElementById('promo-img-preview').innerHTML = '🎉';
-      document.getElementById('promo-img-preview').style.backgroundImage = '';
       document.getElementById('promo-img-file').value = '';
       document.getElementById('promo-img-status').textContent = '';
+      document.getElementById('pf-sku-codes').value = '';
+      document.getElementById('pf-disc-type').value = 'fixed';
+      document.getElementById('pf-disc-value').value = '';
+      document.getElementById('pf-disc-unit').textContent = '฿';
+      togglePromoTypeFields();
       new bootstrap.Modal(document.getElementById('promoModal')).show();
     }
 
     function openEditPromoModal(p) {
       editingPromoId = p.id; promoImgFile = null;
       document.getElementById('promo-modal-edit-title').innerHTML = '<i class="bi bi-pencil me-2"></i>แก้ไขโปรโมชั่น';
+      const isSku = p.type === 'sku_discount';
+      document.getElementById(isSku ? 'pf-type-sku' : 'pf-type-announce').checked = true;
       document.getElementById('pf-promo-title').value = p.title || '';
-      document.getElementById('pf-promo-desc').value = p.description || '';
       document.getElementById('pf-promo-active').checked = p.is_active !== false;
-      const prev = document.getElementById('promo-img-preview');
-      if (p.image_url) {
-        prev.innerHTML = `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover">`;
+      if (isSku) {
+        document.getElementById('pf-sku-codes').value = (p.sku_codes||[]).join('\n');
+        document.getElementById('pf-disc-type').value = p.discount_type || 'fixed';
+        document.getElementById('pf-disc-value').value = p.discount_value || '';
+        document.getElementById('pf-disc-unit').textContent = p.discount_type === 'percent' ? '%' : '฿';
       } else {
-        prev.innerHTML = '🎉';
+        document.getElementById('pf-promo-desc').value = p.description || '';
+        const prev = document.getElementById('promo-img-preview');
+        prev.innerHTML = p.image_url ? `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover">` : '🎉';
+        document.getElementById('promo-img-file').value = '';
+        document.getElementById('promo-img-status').textContent = '';
       }
-      document.getElementById('promo-img-file').value = '';
-      document.getElementById('promo-img-status').textContent = '';
+      togglePromoTypeFields();
       new bootstrap.Modal(document.getElementById('promoModal')).show();
     }
 
@@ -2573,27 +2661,39 @@
     async function savePromo() {
       const title = document.getElementById('pf-promo-title').value.trim();
       if (!title) { toast('กรุณาใส่ชื่อโปรโมชั่น', 'warning'); return; }
+      const isSku = document.getElementById('pf-type-sku').checked;
       const btn = document.getElementById('save-promo-btn');
       btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>กำลังบันทึก...';
       try {
-        let image_url = '';
-        if (editingPromoId) {
-          const existing = await db.collection('promotions').doc(editingPromoId).get();
-          image_url = existing.data()?.image_url || '';
-        }
-        if (promoImgFile) {
-          document.getElementById('promo-img-status').textContent = 'กำลังอัปโหลดรูป...';
-          const ref = storage.ref(`promotions/${Date.now()}_${promoImgFile.name}`);
-          await ref.put(promoImgFile);
-          image_url = await ref.getDownloadURL();
-        }
-        const data = {
+        let data = {
           title,
-          description: document.getElementById('pf-promo-desc').value.trim(),
-          image_url,
+          type: isSku ? 'sku_discount' : 'announcement',
           is_active: document.getElementById('pf-promo-active').checked,
           updated_at: FieldValue.serverTimestamp()
         };
+        if (isSku) {
+          const rawCodes = document.getElementById('pf-sku-codes').value.trim();
+          if (!rawCodes) { toast('กรุณาใส่รหัสสินค้าอย่างน้อย 1 รายการ', 'warning'); btn.disabled=false; btn.innerHTML='<i class="bi bi-save me-1"></i>บันทึก'; return; }
+          const discVal = Number(document.getElementById('pf-disc-value').value);
+          if (!discVal) { toast('กรุณาใส่มูลค่าส่วนลด', 'warning'); btn.disabled=false; btn.innerHTML='<i class="bi bi-save me-1"></i>บันทึก'; return; }
+          data.sku_codes = rawCodes.split('\n').map(s => s.trim()).filter(Boolean);
+          data.discount_type = document.getElementById('pf-disc-type').value;
+          data.discount_value = discVal;
+        } else {
+          let image_url = '';
+          if (editingPromoId) {
+            const existing = await db.collection('promotions').doc(editingPromoId).get();
+            image_url = existing.data()?.image_url || '';
+          }
+          if (promoImgFile) {
+            document.getElementById('promo-img-status').textContent = 'กำลังอัปโหลดรูป...';
+            const ref = storage.ref(`promotions/${Date.now()}_${promoImgFile.name}`);
+            await ref.put(promoImgFile);
+            image_url = await ref.getDownloadURL();
+          }
+          data.description = document.getElementById('pf-promo-desc').value.trim();
+          data.image_url = image_url;
+        }
         if (editingPromoId) {
           await db.collection('promotions').doc(editingPromoId).update(data);
         } else {
