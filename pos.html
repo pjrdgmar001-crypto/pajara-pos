@@ -728,6 +728,21 @@
       const uDoc = await db.collection('users').doc(user.uid).get();
       userRole = uDoc.exists ? uDoc.data().role : 'staff';
       if (userRole === 'admin') document.getElementById('admin-link').style.display = '';
+
+      // Admin ที่ยังไม่ได้เลือกสาขา (เปิด pos.html โดยตรงโดยไม่ผ่านหน้าเลือกสาขา)
+      if (currentBranch === '__all__' || !currentBranch) {
+        if (userRole === 'admin') {
+          // ให้ admin กลับไปเลือกสาขาที่ admin.html
+          document.getElementById('loading').innerHTML =
+            '<div style="text-align:center;padding:40px"><div style="font-size:1.1rem;margin-bottom:12px">กรุณาเลือกสาขาก่อนเข้าหน้าร้าน</div>' +
+            '<a href="admin.html" class="btn btn-primary"><i class="bi bi-arrow-left me-1"></i>กลับหน้าหลังบ้าน</a></div>';
+          return;
+        }
+        // staff ที่ไม่มีสาขา → redirect login
+        window.location.href = 'index.html';
+        return;
+      }
+
       await loadSettings();
       await loadProducts();
       document.getElementById('loading').style.display = 'none';
