@@ -758,8 +758,12 @@
       promoSnap.forEach(d => {
         const pr = d.data();
         if (pr.type === 'sku_discount') {
-          (pr.sku_codes || []).forEach(code => {
-            skuPromoMap[code.toLowerCase()] = { title: pr.title, discount_type: pr.discount_type, discount_value: pr.discount_value };
+          (pr.sku_items || []).forEach(item => {
+            const key = (item.code || '').toLowerCase();
+            const bkey = (item.barcode || '').toLowerCase();
+            const entry = { title: pr.title, discount_type: item.discount_type, discount_value: item.discount_value };
+            if (key) skuPromoMap[key] = entry;
+            if (bkey) skuPromoMap[bkey] = entry;
           });
         }
       });

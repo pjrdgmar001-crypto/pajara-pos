@@ -879,26 +879,42 @@
 
           <!-- SKU Discount fields -->
           <div id="pf-sku-fields" style="display:none">
-            <div class="alert alert-info py-2 small"><i class="bi bi-info-circle me-1"></i>เมื่อสแกนบาร์โค้ดสินค้าที่กำหนด ระบบ POS จะใส่ส่วนลดให้อัตโนมัติ และแสดงป้าย 🔥โปร บนหน้าสินค้า</div>
-            <div class="mb-3">
-              <label class="form-label fw-semibold">รหัสสินค้า / SKU <span class="text-danger">*</span></label>
-              <textarea class="form-control" id="pf-sku-codes" rows="4" placeholder="ใส่รหัสสินค้า (SKU) 1 รหัสต่อบรรทัด เช่น&#10;SKU001&#10;SKU002&#10;SKU003"></textarea>
-              <div class="form-text">ใส่รหัสสินค้า (product code) หรือ Barcode 1 รายการต่อบรรทัด</div>
-            </div>
-            <div class="row g-3">
-              <div class="col-md-6">
-                <label class="form-label fw-semibold">ประเภทส่วนลด</label>
-                <select class="form-select" id="pf-disc-type" onchange="document.getElementById('pf-disc-unit').textContent=this.value==='percent'?'%':'฿'">
-                  <option value="fixed">จำนวนเงิน (฿)</option>
-                  <option value="percent">เปอร์เซ็นต์ (%)</option>
-                </select>
+            <div class="alert alert-info py-2 small mb-3"><i class="bi bi-info-circle me-1"></i>ค้นหาสินค้า เพิ่มลงรายการ แล้วกำหนดส่วนลดแต่ละรายการได้เลย — ระบบ POS จะใส่ส่วนลดอัตโนมัติเมื่อสแกน</div>
+
+            <!-- Search box -->
+            <div class="mb-2 position-relative">
+              <label class="form-label fw-semibold">ค้นหาสินค้า</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="pf-sku-search"
+                       placeholder="พิมพ์ชื่อสินค้า หรือรหัสสินค้า..."
+                       oninput="renderSkuSearchResults()" autocomplete="off">
               </div>
-              <div class="col-md-6">
-                <label class="form-label fw-semibold">มูลค่าส่วนลด <span class="text-danger">*</span></label>
-                <div class="input-group">
-                  <input type="number" class="form-control" id="pf-disc-value" min="0" placeholder="0">
-                  <span class="input-group-text" id="pf-disc-unit">฿</span>
+              <!-- Dropdown results -->
+              <div id="pf-sku-results" style="display:none;position:absolute;z-index:1060;left:0;right:0;max-height:220px;overflow-y:auto;background:white;border:1px solid #dee2e6;border-radius:0 0 8px 8px;box-shadow:0 4px 12px rgba(0,0,0,0.12)"></div>
+            </div>
+
+            <!-- Selected SKUs table -->
+            <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">
+              <div style="background:#f8fafc;padding:8px 12px;font-size:0.82rem;font-weight:600;color:#475569;border-bottom:1px solid #e2e8f0">
+                รายการสินค้าที่เพิ่ม (<span id="pf-sku-count">0</span> รายการ)
+              </div>
+              <div id="pf-sku-table-wrap" style="min-height:80px">
+                <div id="pf-sku-empty" class="text-center py-4 text-muted small">
+                  <i class="bi bi-box-seam" style="font-size:1.5rem;display:block;opacity:0.3;margin-bottom:4px"></i>
+                  ยังไม่มีสินค้า — ค้นหาแล้วกดเพิ่ม
                 </div>
+                <table class="table table-sm mb-0" id="pf-sku-table" style="display:none">
+                  <thead style="background:#f8fafc">
+                    <tr>
+                      <th style="font-size:0.78rem;padding:6px 10px">สินค้า</th>
+                      <th style="font-size:0.78rem;padding:6px 8px;width:90px">ประเภท</th>
+                      <th style="font-size:0.78rem;padding:6px 8px;width:110px">ส่วนลด</th>
+                      <th style="width:36px;padding:6px 8px"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="pf-sku-tbody"></tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -2532,14 +2548,97 @@
     // ── Promotions ────────────────────────────────────────
     let editingPromoId = null;
     let promoImgFile = null;
+    let selectedSkuItems = []; // [{code, name, discount_type, discount_value}]
 
     function togglePromoTypeFields() {
       const isSku = document.getElementById('pf-type-sku').checked;
       document.getElementById('pf-announce-fields').style.display = isSku ? 'none' : '';
       document.getElementById('pf-sku-fields').style.display = isSku ? '' : 'none';
-      const unit = document.getElementById('pf-disc-type')?.value === 'percent' ? '%' : '฿';
-      if (document.getElementById('pf-disc-unit')) document.getElementById('pf-disc-unit').textContent = unit;
     }
+
+    // ── SKU search & table ────────────────────────────────
+    function renderSkuSearchResults() {
+      const q = (document.getElementById('pf-sku-search').value || '').toLowerCase().trim();
+      const box = document.getElementById('pf-sku-results');
+      if (!q) { box.style.display = 'none'; return; }
+      const already = new Set(selectedSkuItems.map(x => x.code));
+      const hits = allProducts.filter(p =>
+        !already.has(p.code) && (
+          (p.name || '').toLowerCase().includes(q) ||
+          (p.code || '').toLowerCase().includes(q) ||
+          (p.barcode || '').toLowerCase().includes(q)
+        )
+      ).slice(0, 30);
+      if (!hits.length) {
+        box.innerHTML = '<div style="padding:10px 14px;color:#94a3b8;font-size:0.85rem">ไม่พบสินค้า</div>';
+        box.style.display = '';
+        return;
+      }
+      box.innerHTML = hits.map(p => `
+        <div onclick="addSkuItem('${(p.code||'').replace(/'/g,"\\'")}','${(p.name||'').replace(/'/g,"\\'")}','${(p.barcode||'').replace(/'/g,"\\'")}')"
+             style="padding:8px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:0.83rem"
+             onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background=''">
+          <div class="fw-semibold">${p.name || '-'}</div>
+          <div style="color:#94a3b8;font-size:0.75rem">${p.code || ''} ${p.barcode ? '| '+p.barcode : ''} | ฿${Number(p.selling_price||0).toLocaleString()}</div>
+        </div>`).join('');
+      box.style.display = '';
+    }
+
+    function addSkuItem(code, name, barcode) {
+      if (selectedSkuItems.find(x => x.code === code)) return;
+      selectedSkuItems.push({ code, name, barcode: barcode||'', discount_type: 'fixed', discount_value: 0 });
+      document.getElementById('pf-sku-search').value = '';
+      document.getElementById('pf-sku-results').style.display = 'none';
+      renderSkuTable();
+    }
+
+    function removeSkuItem(idx) {
+      selectedSkuItems.splice(idx, 1);
+      renderSkuTable();
+    }
+
+    function updateSkuItem(idx, field, val) {
+      if (!selectedSkuItems[idx]) return;
+      selectedSkuItems[idx][field] = field === 'discount_value' ? Number(val) : val;
+    }
+
+    function renderSkuTable() {
+      const n = selectedSkuItems.length;
+      document.getElementById('pf-sku-count').textContent = n;
+      const empty = document.getElementById('pf-sku-empty');
+      const tbl = document.getElementById('pf-sku-table');
+      if (!n) { empty.style.display = ''; tbl.style.display = 'none'; return; }
+      empty.style.display = 'none'; tbl.style.display = '';
+      document.getElementById('pf-sku-tbody').innerHTML = selectedSkuItems.map((item, i) => `
+        <tr>
+          <td style="padding:6px 10px;vertical-align:middle">
+            <div style="font-size:0.82rem;font-weight:600">${item.name}</div>
+            <div style="font-size:0.72rem;color:#94a3b8">${item.code}${item.barcode?' | '+item.barcode:''}</div>
+          </td>
+          <td style="padding:4px 6px;vertical-align:middle">
+            <select class="form-select form-select-sm" onchange="updateSkuItem(${i},'discount_type',this.value)">
+              <option value="fixed" ${item.discount_type==='fixed'?'selected':''}>฿ บาท</option>
+              <option value="percent" ${item.discount_type==='percent'?'selected':''}>% เปอร์เซ็นต์</option>
+            </select>
+          </td>
+          <td style="padding:4px 6px;vertical-align:middle">
+            <input type="number" class="form-control form-control-sm" min="0" value="${item.discount_value||''}"
+                   placeholder="0" onchange="updateSkuItem(${i},'discount_value',this.value)"
+                   style="width:90px">
+          </td>
+          <td style="padding:4px 6px;vertical-align:middle;text-align:center">
+            <button class="btn btn-sm btn-outline-danger" onclick="removeSkuItem(${i})" style="padding:2px 7px;line-height:1.2">×</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    // close search dropdown when clicking outside
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#pf-sku-search') && !e.target.closest('#pf-sku-results')) {
+        const r = document.getElementById('pf-sku-results');
+        if (r) r.style.display = 'none';
+      }
+    });
 
     async function loadPromotions() {
       const grid = document.getElementById('promo-grid');
@@ -2556,22 +2655,25 @@
         const col = document.createElement('div');
         col.className = 'col-md-6 col-lg-4';
         if (isSku) {
-          const discLabel = p.discount_type === 'percent' ? `${p.discount_value}%` : `฿${p.discount_value}`;
-          const skuList = (p.sku_codes||[]).slice(0,5).join(', ') + ((p.sku_codes||[]).length > 5 ? ` ...+${p.sku_codes.length-5}` : '');
+          const items = p.sku_items || [];
+          const previewRows = items.slice(0, 3).map(it => {
+            const label = it.discount_type === 'percent' ? `-${it.discount_value}%` : `-฿${it.discount_value}`;
+            return `<div style="display:flex;justify-content:space-between;font-size:0.78rem;padding:2px 0;border-bottom:1px solid #fee2e2">
+              <span style="color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">${it.name||it.code}</span>
+              <span style="color:#dc2626;font-weight:700;white-space:nowrap;margin-left:8px">${label}</span>
+            </div>`;
+          }).join('');
+          const more = items.length > 3 ? `<div style="font-size:0.72rem;color:#94a3b8;margin-top:4px">+${items.length-3} รายการ</div>` : '';
           col.innerHTML = `
             <div class="data-table h-100" style="border-radius:14px;overflow:hidden">
-              <div style="height:80px;background:linear-gradient(135deg,#dc2626,#b91c1c);display:flex;align-items:center;justify-content:center;gap:10px">
-                <i class="bi bi-tag-fill text-white" style="font-size:2rem"></i>
-                <div style="color:white;text-align:center"><div style="font-size:1.5rem;font-weight:800">-${discLabel}</div><div style="font-size:0.75rem;opacity:0.85">ส่วนลดรายสินค้า</div></div>
+              <div style="background:linear-gradient(135deg,#dc2626,#b91c1c);padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
+                <div style="color:white"><i class="bi bi-tag-fill me-1"></i><strong>${p.title||'ไม่มีชื่อ'}</strong></div>
+                <span class="badge ${p.is_active ? 'bg-light text-danger' : 'bg-secondary'}">${p.is_active ? 'เปิด' : 'ปิด'}</span>
               </div>
-              <div style="padding:14px">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                  <h6 class="fw-bold mb-0">${p.title||'ไม่มีชื่อ'}</h6>
-                  <span class="badge ${p.is_active ? 'bg-danger' : 'bg-secondary'}">${p.is_active ? 'เปิด' : 'ปิด'}</span>
-                </div>
-                <div class="small text-muted mb-1"><i class="bi bi-upc-scan me-1"></i>SKU: ${skuList || '-'}</div>
-                <div class="small text-muted mb-3">รายการสินค้า: ${(p.sku_codes||[]).length} รหัส</div>
-                <div class="d-flex gap-2">
+              <div style="padding:10px 14px">
+                <div style="font-size:0.75rem;color:#64748b;margin-bottom:6px"><i class="bi bi-upc-scan me-1"></i>${items.length} รายการสินค้า</div>
+                ${previewRows}${more}
+                <div class="d-flex gap-2 mt-3">
                   <button class="btn btn-sm btn-outline-primary flex-fill" onclick='openEditPromoModal(${JSON.stringify(p)})'><i class="bi bi-pencil me-1"></i>แก้ไข</button>
                   <button class="btn btn-sm ${p.is_active ? 'btn-outline-warning' : 'btn-outline-success'}" onclick="togglePromo('${p.id}',${p.is_active})">
                     ${p.is_active ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>'}
@@ -2608,6 +2710,7 @@
 
     function openAddPromoModal() {
       editingPromoId = null; promoImgFile = null;
+      selectedSkuItems = [];
       document.getElementById('promo-modal-edit-title').innerHTML = '<i class="bi bi-megaphone me-2"></i>เพิ่มโปรโมชั่น';
       document.getElementById('pf-type-announce').checked = true;
       document.getElementById('pf-promo-title').value = '';
@@ -2616,10 +2719,9 @@
       document.getElementById('promo-img-preview').innerHTML = '🎉';
       document.getElementById('promo-img-file').value = '';
       document.getElementById('promo-img-status').textContent = '';
-      document.getElementById('pf-sku-codes').value = '';
-      document.getElementById('pf-disc-type').value = 'fixed';
-      document.getElementById('pf-disc-value').value = '';
-      document.getElementById('pf-disc-unit').textContent = '฿';
+      document.getElementById('pf-sku-search').value = '';
+      document.getElementById('pf-sku-results').style.display = 'none';
+      renderSkuTable();
       togglePromoTypeFields();
       new bootstrap.Modal(document.getElementById('promoModal')).show();
     }
@@ -2632,11 +2734,12 @@
       document.getElementById('pf-promo-title').value = p.title || '';
       document.getElementById('pf-promo-active').checked = p.is_active !== false;
       if (isSku) {
-        document.getElementById('pf-sku-codes').value = (p.sku_codes||[]).join('\n');
-        document.getElementById('pf-disc-type').value = p.discount_type || 'fixed';
-        document.getElementById('pf-disc-value').value = p.discount_value || '';
-        document.getElementById('pf-disc-unit').textContent = p.discount_type === 'percent' ? '%' : '฿';
+        selectedSkuItems = (p.sku_items || []).map(it => ({ ...it }));
+        document.getElementById('pf-sku-search').value = '';
+        document.getElementById('pf-sku-results').style.display = 'none';
+        renderSkuTable();
       } else {
+        selectedSkuItems = [];
         document.getElementById('pf-promo-desc').value = p.description || '';
         const prev = document.getElementById('promo-img-preview');
         prev.innerHTML = p.image_url ? `<img src="${p.image_url}" style="width:100%;height:100%;object-fit:cover">` : '🎉';
@@ -2672,13 +2775,19 @@
           updated_at: FieldValue.serverTimestamp()
         };
         if (isSku) {
-          const rawCodes = document.getElementById('pf-sku-codes').value.trim();
-          if (!rawCodes) { toast('กรุณาใส่รหัสสินค้าอย่างน้อย 1 รายการ', 'warning'); btn.disabled=false; btn.innerHTML='<i class="bi bi-save me-1"></i>บันทึก'; return; }
-          const discVal = Number(document.getElementById('pf-disc-value').value);
-          if (!discVal) { toast('กรุณาใส่มูลค่าส่วนลด', 'warning'); btn.disabled=false; btn.innerHTML='<i class="bi bi-save me-1"></i>บันทึก'; return; }
-          data.sku_codes = rawCodes.split('\n').map(s => s.trim()).filter(Boolean);
-          data.discount_type = document.getElementById('pf-disc-type').value;
-          data.discount_value = discVal;
+          if (!selectedSkuItems.length) {
+            toast('กรุณาเพิ่มสินค้าอย่างน้อย 1 รายการ', 'warning');
+            btn.disabled = false; btn.innerHTML = '<i class="bi bi-save me-1"></i>บันทึก'; return;
+          }
+          const invalid = selectedSkuItems.find(it => !it.discount_value || Number(it.discount_value) <= 0);
+          if (invalid) {
+            toast(`กรุณาใส่ส่วนลดให้ครบ (${invalid.name})`, 'warning');
+            btn.disabled = false; btn.innerHTML = '<i class="bi bi-save me-1"></i>บันทึก'; return;
+          }
+          data.sku_items = selectedSkuItems.map(it => ({
+            code: it.code, name: it.name, barcode: it.barcode || '',
+            discount_type: it.discount_type, discount_value: Number(it.discount_value)
+          }));
         } else {
           let image_url = '';
           if (editingPromoId) {
