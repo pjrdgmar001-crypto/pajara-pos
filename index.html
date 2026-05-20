@@ -145,30 +145,34 @@
 
       // staff: ตรวจสอบสาขาที่เข้าถึงได้
       const allowedBranches = userData.branches || [];
+
+      let branches = [];
       if (allowedBranches.length === 0) {
-        // ไม่มีสาขาที่กำหนด → เข้า pos ได้แบบไม่มีสาขาเฉพาะ (backward compat)
-        sessionStorage.setItem('selectedBranch', 'main');
-        sessionStorage.setItem('selectedBranchName', 'สาขาหลัก');
+        // branches = [] หมายถึงเข้าได้ทุกสาขา → โหลดสาขาทั้งหมดจาก Firestore
+        const allSnap = await db.collection('branches').orderBy('created_at', 'asc').get();
+        allSnap.forEach(d => branches.push({ id: d.id, name: d.data().name || d.id }));
+        if (!branches.length) {
+          // ยังไม่มีสาขาใน Firestore → ใช้สาขาหลักเป็นค่า default
+          sessionStorage.setItem('selectedBranch', 'main');
+          sessionStorage.setItem('selectedBranchName', 'สาขาหลัก');
+          window.location.href = 'pos.html';
+          return;
+        }
+      } else {
+        const branchSnaps = await Promise.all(allowedBranches.map(id => db.collection('branches').doc(id).get()));
+        branches = branchSnaps.map((snap, i) => ({
+          id: allowedBranches[i],
+          name: snap.exists ? snap.data().name : allowedBranches[i]
+        }));
+      }
+
+      if (branches.length === 1) {
+        // สาขาเดียว → เข้าตรงเลย ไม่ต้องแสดงหน้าเลือก
+        sessionStorage.setItem('selectedBranch', branches[0].id);
+        sessionStorage.setItem('selectedBranchName', branches[0].name);
         window.location.href = 'pos.html';
         return;
       }
-
-      if (allowedBranches.length === 1) {
-        // สาขาเดียว → เข้าตรง
-        const branchSnap = await db.collection('branches').doc(allowedBranches[0]).get();
-        const branchName = branchSnap.exists ? branchSnap.data().name : allowedBranches[0];
-        sessionStorage.setItem('selectedBranch', allowedBranches[0]);
-        sessionStorage.setItem('selectedBranchName', branchName);
-        window.location.href = 'pos.html';
-        return;
-      }
-
-      // หลายสาขา → แสดงหน้าเลือกสาขา
-      const branchSnaps = await Promise.all(allowedBranches.map(id => db.collection('branches').doc(id).get()));
-      const branches = branchSnaps.map((snap, i) => ({
-        id: allowedBranches[i],
-        name: snap.exists ? snap.data().name : allowedBranches[i]
-      }));
 
       document.getElementById('login-card').classList.add('d-none');
       document.getElementById('branch-card').classList.remove('d-none');
