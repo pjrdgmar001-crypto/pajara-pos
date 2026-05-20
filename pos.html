@@ -374,6 +374,7 @@
 
         <button class="btn-pay" id="pay-btn" onclick="openPaymentModal()" disabled>
           <i class="bi bi-credit-card me-2"></i>ชำระเงิน
+          <kbd style="font-size:0.62rem;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:middle;font-family:inherit">↵</kbd>
         </button>
         <div style="display:flex;gap:6px;margin-top:6px">
           <button class="btn-clear" style="flex:1" onclick="openMemberModal()">
@@ -551,6 +552,7 @@
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
           <button type="button" class="btn btn-success px-4" id="confirm-btn" onclick="confirmPayment()">
             <i class="bi bi-check-circle me-2"></i>ยืนยันชำระเงิน
+            <kbd style="font-size:0.65rem;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.5);border-radius:4px;padding:1px 5px;margin-left:4px;font-family:inherit">↵</kbd>
           </button>
         </div>
       </div>
@@ -566,7 +568,10 @@
         </div>
         <div class="modal-body" id="receipt-body"></div>
         <div class="modal-footer border-0">
-          <button class="btn btn-secondary" data-bs-dismiss="modal" onclick="afterSale()">ปิด (ขายต่อ)</button>
+          <button class="btn btn-secondary" id="rcpt-close-btn" data-bs-dismiss="modal" onclick="afterSale()">
+            ปิด (ขายต่อ)
+            <kbd style="font-size:0.65rem;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.35);border-radius:4px;padding:1px 5px;margin-left:4px;font-family:inherit">↵</kbd>
+          </button>
           <button class="btn btn-outline-dark" onclick="doPrint()"><i class="bi bi-printer me-1"></i>พิมพ์</button>
         </div>
       </div>
@@ -1412,6 +1417,100 @@
         return;
       }
       if (e.key.length === 1) { bbuf += e.key; clearTimeout(btimer); btimer = setTimeout(() => bbuf = '', 500); }
+    });
+
+    // ── Smart Enter Key Flow ──────────────────────────────
+    document.addEventListener('keydown', function(e) {
+      if (e.key !== 'Enter') return;
+
+      const activeModal = document.querySelector('.modal.show');
+      const mid = activeModal?.id;
+
+      // ── ไม่มี modal เปิดอยู่ ──────────────────────────
+      if (!mid) {
+        const si = document.getElementById('search-input');
+        // ถ้า focus อยู่ที่ search-input ให้ handler เดิมจัดการ
+        if (e.target === si) return;
+        // ถ้า focus อยู่ที่ input อื่น ไม่ทำอะไร
+        if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+        // ถ้ามี barcode ค้างอยู่ ให้ barcode handler จัดการ
+        if (bbuf) return;
+        // ตะกร้ามีสินค้า → เปิดหน้าชำระเงิน
+        const payBtn = document.getElementById('pay-btn');
+        if (cart.length > 0 && payBtn && !payBtn.disabled) {
+          e.preventDefault();
+          openPaymentModal();
+        }
+        return;
+      }
+
+      // ── memberModal ───────────────────────────────────
+      if (mid === 'memberModal') {
+        const phoneInput = document.getElementById('mb-search-phone');
+        const ptsInput   = document.getElementById('use-pts-input');
+        const newForm    = document.getElementById('mb-new-form');
+        const applyBtn   = document.querySelector('#memberModal [onclick="applyMemberFromCache()"]');
+
+        // ช่องเบอร์โทร → handler เดิมค้นหาสมาชิก
+        if (e.target === phoneInput) return;
+
+        // ช่องกรอกแต้ม หรือ ปุ่ม apply ปรากฏอยู่ → ใช้สิทธิ์สมาชิก
+        if (e.target === ptsInput || applyBtn) {
+          e.preventDefault(); applyMemberFromCache(); return;
+        }
+
+        // ฟอร์มสมัครสมาชิกใหม่ → สร้างสมาชิก
+        if (!newForm?.classList.contains('d-none')) {
+          e.preventDefault(); createMember(); return;
+        }
+
+        // อื่นๆ → ค้นหาสมาชิก
+        if (e.target.tagName !== 'INPUT') {
+          e.preventDefault(); searchMember();
+        }
+        return;
+      }
+
+      // ── payModal ─────────────────────────────────────
+      if (mid === 'payModal') {
+        const btn = document.getElementById('confirm-btn');
+        if (btn?.disabled) return;
+
+        if (payMethod === 'cash') {
+          const recv = document.getElementById('received-amt');
+          const val  = Number(recv?.value || 0);
+          if (!recv?.value || val <= 0) {
+            // ยังไม่ได้ใส่ยอดรับ → focus ช่องรับเงิน
+            e.preventDefault();
+            recv?.focus();
+            recv?.select();
+            return;
+          }
+          // ใส่ยอดแล้ว Enter → ยืนยัน
+          if (e.target === recv) { e.preventDefault(); confirmPayment(); return; }
+        }
+
+        // โอน / QR หรือกดจากที่อื่น
+        if (['INPUT','TEXTAREA'].includes(e.target.tagName) && e.target.id !== 'received-amt') return;
+        e.preventDefault();
+        confirmPayment();
+        return;
+      }
+
+      // ── rcptModal ─────────────────────────────────────
+      if (mid === 'rcptModal') {
+        e.preventDefault();
+        bootstrap.Modal.getInstance(document.getElementById('rcptModal'))?.hide();
+        afterSale();
+        return;
+      }
+
+      // ── promoModal ────────────────────────────────────
+      if (mid === 'promoModal') {
+        e.preventDefault();
+        bootstrap.Modal.getInstance(document.getElementById('promoModal'))?.hide();
+        return;
+      }
     });
 
     // ── Camera ────────────────────────────────────────────
