@@ -159,7 +159,23 @@
     /* Receipt print */
     @media print {
       body > *:not(#print-area) { display: none !important; }
-      #print-area { display: block !important; font-family: 'Courier New', monospace; font-size: 12px; }
+      #print-area {
+        display: block !important;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #000 !important;
+      }
+      /* บังคับทุก element ให้เป็นสีดำ ไม่มี background */
+      #print-area * {
+        color: #000 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        background: transparent !important;
+        box-shadow: none !important;
+      }
+      #print-area s { color: #555 !important; }
+      #print-area hr { border-color: #000 !important; opacity: 1 !important; }
     }
     #print-area { display: none; }
 
@@ -1259,13 +1275,18 @@
       const storeName = settings.store_name || 'PAJARA PAJAMAS';
       const branchName = currentBranchName;
 
+      const S = 'font-size:12px';        // ขนาดตัวอักษรปกติ
+      const Ss = 'font-size:11px';       // ขนาดเล็กลงหน่อย
+      const C2 = 'color:#222';           // สีรอง (เข้มพอปริ้น)
       const rows = sale.items.map(i => {
         const iDisc = Number(i.item_discount || 0);
         const lineNet = (i.total||0) - iDisc;
-        return `<tr><td colspan="2" style="font-size:11px;padding:2px 0">${i.product_name}</td></tr>
-        <tr><td style="font-size:11px;padding:1px 0">${i.quantity} × ฿${(i.unit_price||0).toLocaleString()}</td>
-            <td style="font-size:11px;padding:1px 0;text-align:right">${iDisc > 0 ? `<s style="color:#aaa">฿${(i.total||0).toLocaleString()}</s> ฿${lineNet.toLocaleString()}` : `฿${(i.total||0).toLocaleString()}`}</td></tr>
-        ${iDisc > 0 ? `<tr><td style="font-size:10px;color:#aaa;padding-left:6px">└ ส่วนลดรายการ</td><td style="font-size:10px;color:#aaa;text-align:right">-฿${iDisc.toLocaleString()}</td></tr>` : ''}`;
+        return `<tr><td colspan="2" style="${S};padding:3px 0;font-weight:600">${i.product_name}</td></tr>
+        <tr><td style="${S};padding:1px 0">${i.quantity} × ฿${(i.unit_price||0).toLocaleString()}</td>
+            <td style="${S};padding:1px 0;text-align:right">${iDisc > 0
+              ? `<s style="color:#555">฿${(i.total||0).toLocaleString()}</s> <strong>฿${lineNet.toLocaleString()}</strong>`
+              : `฿${(i.total||0).toLocaleString()}`}</td></tr>
+        ${iDisc > 0 ? `<tr><td style="${Ss};${C2};padding-left:8px">└ ส่วนลดรายการ</td><td style="${Ss};${C2};text-align:right">-฿${iDisc.toLocaleString()}</td></tr>` : ''}`;
       }).join('');
 
       // สร้างบรรทัดส่วนลด breakdown
@@ -1279,16 +1300,16 @@
       if (totalD > 0) {
         const types = [itemD > 0, staffD > 0, memberD > 0, pointsD > 0].filter(Boolean).length;
         if (types > 1) {
-          discRows += `<tr><td style="font-size:11px">ส่วนลดรวม</td><td style="text-align:right;font-size:11px">-฿${totalD.toLocaleString()}</td></tr>`;
-          if (staffD > 0)  discRows += `<tr><td style="font-size:10px;color:#888;padding-left:10px">└ พนักงาน</td><td style="text-align:right;font-size:10px;color:#888">-฿${staffD.toLocaleString()}</td></tr>`;
-          if (memberD > 0) discRows += `<tr><td style="font-size:10px;color:#888;padding-left:10px">└ สมาชิก</td><td style="text-align:right;font-size:10px;color:#888">-฿${memberD.toLocaleString()}</td></tr>`;
-          if (pointsD > 0) discRows += `<tr><td style="font-size:10px;color:#888;padding-left:10px">└ แต้มสะสม</td><td style="text-align:right;font-size:10px;color:#888">-฿${pointsD.toLocaleString()}</td></tr>`;
+          discRows += `<tr><td style="${S}">ส่วนลดรวม</td><td style="text-align:right;${S}">-฿${totalD.toLocaleString()}</td></tr>`;
+          if (staffD > 0)  discRows += `<tr><td style="${Ss};${C2};padding-left:10px">└ พนักงาน</td><td style="text-align:right;${Ss};${C2}">-฿${staffD.toLocaleString()}</td></tr>`;
+          if (memberD > 0) discRows += `<tr><td style="${Ss};${C2};padding-left:10px">└ สมาชิก</td><td style="text-align:right;${Ss};${C2}">-฿${memberD.toLocaleString()}</td></tr>`;
+          if (pointsD > 0) discRows += `<tr><td style="${Ss};${C2};padding-left:10px">└ แต้มสะสม</td><td style="text-align:right;${Ss};${C2}">-฿${pointsD.toLocaleString()}</td></tr>`;
         } else if (totalD > 0) {
-          discRows = `<tr><td style="font-size:11px">ส่วนลด</td><td style="text-align:right;font-size:11px">-฿${totalD.toLocaleString()}</td></tr>`;
+          discRows = `<tr><td style="${S}">ส่วนลด</td><td style="text-align:right;${S}">-฿${totalD.toLocaleString()}</td></tr>`;
         }
       }
 
-      const memberLine = sale.member_name ? `<tr><td style="font-size:10px;color:#888">สมาชิก</td><td style="text-align:right;font-size:10px;color:#888">${sale.member_name}</td></tr>` : '';
+      const memberLine = sale.member_name ? `<tr><td style="${Ss};${C2}">สมาชิก</td><td style="text-align:right;${Ss};${C2}">${sale.member_name}</td></tr>` : '';
 
       // กล่องแต้มสะสม (แสดงเฉพาะเมื่อมีสมาชิก)
       let pointsSection = '';
@@ -1297,43 +1318,41 @@
         const up = Number(sale.used_points || 0);
         const pb = Number(sale.points_before || 0);
         const pa = Number(sale.points_after ?? (pb + ep - up));
-        const nextDisc = Math.floor(pa / 10); // ทุก 10 แต้ม = ฿1
+        const nextDisc = Math.floor(pa / 10);
         let ptRows = '';
-        if (up > 0) ptRows += `<tr><td style="font-size:10px;color:#f87171">└ ใช้แต้ม</td><td style="text-align:right;font-size:10px;color:#f87171">-${up} แต้ม</td></tr>`;
-        if (ep > 0) ptRows += `<tr><td style="font-size:10px;color:#22c55e">└ แต้มที่ได้รับ</td><td style="text-align:right;font-size:10px;color:#22c55e">+${ep} แต้ม</td></tr>`;
+        if (up > 0) ptRows += `<tr><td style="${Ss};${C2}">└ ใช้แต้ม</td><td style="text-align:right;${Ss};${C2}">-${up} แต้ม</td></tr>`;
+        if (ep > 0) ptRows += `<tr><td style="${Ss};${C2}">└ แต้มที่ได้รับ</td><td style="text-align:right;${Ss};${C2}">+${ep} แต้ม</td></tr>`;
         pointsSection = `
-          <hr style="border-style:dashed;margin:8px 0">
+          <hr style="border-style:dashed;margin:8px 0;border-color:#000">
           <table style="width:100%">
-            <tr><td style="font-size:11px;font-weight:700">⭐ แต้มสะสม (${sale.member_name})</td></tr>
+            <tr><td colspan="2" style="${S};font-weight:700">* แต้มสะสม (${sale.member_name})</td></tr>
             ${ptRows}
-            <tr style="border-top:1px dashed #ccc">
-              <td style="font-size:11px;font-weight:700;padding-top:4px">แต้มคงเหลือ</td>
-              <td style="text-align:right;font-size:11px;font-weight:700;padding-top:4px">${pa.toLocaleString()} แต้ม</td>
-            </tr>
-            ${nextDisc > 0 ? `<tr><td colspan="2" style="font-size:10px;color:#888;text-align:center;padding-top:2px">(ใช้ได้ = ฿${nextDisc.toLocaleString()})</td></tr>` : ''}
+            <tr><td style="border-top:1px dashed #555;${S};font-weight:700;padding-top:4px">แต้มคงเหลือ</td>
+                <td style="border-top:1px dashed #555;text-align:right;${S};font-weight:700;padding-top:4px">${pa.toLocaleString()} แต้ม</td></tr>
+            ${nextDisc > 0 ? `<tr><td colspan="2" style="${Ss};${C2};text-align:center;padding-top:2px">(ใช้ได้ = ฿${nextDisc.toLocaleString()})</td></tr>` : ''}
           </table>`;
       }
 
       const html = `
-        <div style="font-family:'Courier New',monospace;max-width:320px;margin:0 auto">
+        <div style="font-family:'Courier New',monospace;max-width:320px;margin:0 auto;color:#000">
           <div style="text-align:center;margin-bottom:12px">
-            <div style="font-size:1rem;font-weight:700">🛍️ ${storeName}</div>
-            <div style="font-size:11px">${branchName}</div>
-            <div style="font-size:11px">${d.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'})} ${d.toLocaleTimeString('th-TH')}</div>
-            <div style="font-size:11px">ใบเสร็จ: ${sale.receipt_no}</div>
+            <div style="font-size:1.05rem;font-weight:700">🛍️ ${storeName}</div>
+            <div style="${S}">${branchName}</div>
+            <div style="${S}">${d.toLocaleDateString('th-TH',{year:'numeric',month:'long',day:'numeric'})} ${d.toLocaleTimeString('th-TH')}</div>
+            <div style="${S}">ใบเสร็จ: ${sale.receipt_no}</div>
           </div>
-          <hr style="border-style:dashed">
+          <hr style="border-style:dashed;border-color:#000">
           <table style="width:100%">${rows}</table>
-          <hr style="border-style:dashed">
-          <table style="width:100%">
+          <hr style="border-style:dashed;border-color:#000">
+          <table style="width:100%;${S}">
             <tr><td>ยอดรวม</td><td style="text-align:right">฿${(sale.subtotal||0).toLocaleString()}</td></tr>
             ${discRows}
-            <tr style="font-weight:700"><td>ยอดสุทธิ</td><td style="text-align:right">฿${(sale.total||0).toLocaleString()}</td></tr>
-            <tr><td style="font-size:11px;color:#666">ชำระโดย</td><td style="font-size:11px;color:#666;text-align:right">${sale.payment_method === 'cash' ? 'เงินสด' : 'โอน/QR'}</td></tr>
+            <tr style="font-weight:700;font-size:13px"><td>ยอดสุทธิ</td><td style="text-align:right">฿${(sale.total||0).toLocaleString()}</td></tr>
+            <tr><td style="${Ss};${C2}">ชำระโดย</td><td style="${Ss};${C2};text-align:right">${sale.payment_method === 'cash' ? 'เงินสด' : 'โอน/QR'}</td></tr>
             ${memberLine}
           </table>
           ${pointsSection}
-          <div style="text-align:center;margin-top:12px;font-size:11px;color:#888">
+          <div style="text-align:center;margin-top:12px;${Ss};${C2};border-top:1px dashed #555;padding-top:8px">
             ${settings.receipt_footer || 'ขอบคุณที่ใช้บริการ'}
           </div>
         </div>`;
